@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 
 mod causal;
-mod counter;
-mod set;
+mod gcounter;
+mod gset;
+mod orset;
 
 pub use crate::causal::{Dot, DotContext};
-pub use crate::counter::GCounter;
-pub use crate::set::GSet;
+pub use crate::gcounter::GCounter;
+pub use crate::gset::GSet;
 
 use std::hash::Hash;
 
