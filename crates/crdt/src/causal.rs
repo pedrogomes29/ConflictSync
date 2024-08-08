@@ -91,11 +91,24 @@ where
             }
         }
     }
+
+    /// Returns the highest dot associated with a given `id`, if any. Essentially, it returns the
+    /// largest dot in the cloud, if exists, or the compressed clock counter, if exists.
+    ///
+    /// The returned dot will be owned by the caller, thus, `id` will be cloned if a dot exists.
+    pub fn get(&self, id: &I) -> Option<Dot<I>> {
+        self.cloud
+            .iter()
+            .rev()
+            .find(|Dot(rid, _)| rid == id)
+            .cloned()
+            .or_else(|| self.clock.get(id).map(|clock| Dot(id.clone(), *clock)))
+    }
 }
 
 impl<I> DotContext<I>
 where
-    I: Eq + Hash + Ord + Clone,
+    I: Clone + Eq + Hash + Ord,
 {
     /// Joins together `self` with `other`, i.e., `self` becomes up to date with the contents of
     /// `other`.
