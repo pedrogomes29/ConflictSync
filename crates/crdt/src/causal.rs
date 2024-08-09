@@ -50,6 +50,19 @@ impl<I> DotContext<I> {
 
 impl<I> DotContext<I>
 where
+    I: Eq + Hash,
+{
+    /// Returns true if `self` is compacted, i.e., for each dot in the cloud is not either coverred
+    /// or right next to the clock.
+    pub fn is_compacted(&self) -> bool {
+        self.cloud
+            .iter()
+            .all(|Dot(id, seq)| !self.clock.get(id).is_some_and(|clock| clock + 1 >= *seq))
+    }
+}
+
+impl<I> DotContext<I>
+where
     I: Eq + Hash + Ord,
 {
     /// Returns `true` if `dot` is contained by the causal context `self`, i.e.,
@@ -75,14 +88,6 @@ where
                 Some(clock) if *clock >= *seq => false,
                 _ => true,
             })
-    }
-
-    /// Returns true if `self` is compacted, i.e., for each dot in the cloud is not either coverred
-    /// or right next to the clock.
-    pub fn is_compacted(&self) -> bool {
-        self.cloud
-            .iter()
-            .all(|Dot(id, seq)| !self.clock.get(id).is_some_and(|clock| clock + 1 >= *seq))
     }
 
     /// Returns a vector with the maximal Dot for each replica in a DotContext, in arbitrary order.
