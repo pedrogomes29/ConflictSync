@@ -41,6 +41,11 @@ impl<I> DotContext<I> {
             cloud: BTreeSet::new(),
         }
     }
+
+    /// Returns `true` if the dot context contains no clock entries and no cloud dots.
+    pub fn is_empty(&self) -> bool {
+        self.clock.is_empty() && self.cloud.is_empty()
+    }
 }
 
 impl<I> DotContext<I>
@@ -63,13 +68,53 @@ where
     pub fn compact(&mut self) {
         self.cloud
             .retain(|Dot(id, seq)| match self.clock.get_mut(id) {
-                Some(clock) if *clock == *seq - 1 => {
+                Some(clock) if *clock + 1 == *seq => {
                     *clock += 1;
                     false
                 }
                 Some(clock) if *clock >= *seq => false,
                 _ => true,
             })
+    }
+
+    /// Returns true if `self` is compacted, i.e., for each dot in the cloud is not either coverred
+    /// or right next to the clock.
+    pub fn is_compacted(&self) -> bool {
+        self.cloud
+            .iter()
+            .all(|Dot(id, seq)| !self.clock.get(id).is_some_and(|clock| clock + 1 >= *seq))
+    }
+
+    /// Returns a vector with the maximal Dot for each replica in a DotContext, in arbitrary order.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use crdt::{Dot, DotContext};
+    ///
+    /// let mut ctx = DotContext::new();
+    /// assert_eq!(ctx.next(&"a"), 1);
+    /// assert_eq!(ctx.next(&"b"), 1);
+    /// assert_eq!(ctx.next(&"a"), 2);
+    ///
+    /// // Dots come in arbitrary order.
+    /// let mut vclock = ctx.dots();
+    /// vclock.sort();
+    /// assert_eq!(vclock, vec![Dot(&"a", 2), Dot(&"b", 1)])
+    /// ```
+    pub fn dots(&self) -> Vec<Dot<&I>> {
+        let mut dots = FxHashMap::from_iter(self.clock.iter());
+
+        self.cloud
+            .iter()
+            .for_each(|Dot(id, seq)| match dots.get_mut(id) {
+                Some(clock) => *clock = max(*clock, seq),
+                None => {
+                    dots.insert(id, seq);
+                }
+            });
+
+        dots.iter().map(|(id, seq)| Dot(*id, **seq)).collect()
     }
 }
 
@@ -156,6 +201,27 @@ mod tests {
     use crate::{Dot, DotContext};
 
     #[test]
+    fn test_emptiness() {
+        let empty_ctx = DotContext::<&str>::new();
+        assert_eq!(empty_ctx.is_empty(), true);
+        assert_eq!(empty_ctx.is_compacted(), true);
+
+        let ctx = DotContext {
+            clock: FxHashMap::from_iter([("a", 3), ("b", 6)]),
+            cloud: BTreeSet::from_iter([]),
+        };
+        assert_eq!(ctx.is_empty(), false);
+        assert_eq!(ctx.is_compacted(), true);
+
+        let ctx = DotContext {
+            clock: FxHashMap::from_iter([]),
+            cloud: BTreeSet::from_iter([Dot("a", 3), Dot("b", 6), Dot("b", 5)]),
+        };
+        assert_eq!(ctx.is_empty(), false);
+        assert_eq!(ctx.is_compacted(), true);
+    }
+
+    #[test]
     fn test_membership() {
         let ctx = DotContext {
             clock: FxHashMap::from_iter([("a", 3), ("b", 6)]),
@@ -206,7 +272,10 @@ mod tests {
             cloud: BTreeSet::from([Dot("b", 9), Dot("c", 3)]),
         };
 
+        assert_eq!(ctx.is_compacted(), false);
+
         ctx.compact();
+        assert_eq!(ctx.is_compacted(), true);
         assert_eq!(ctx, expected_ctx);
     }
 
