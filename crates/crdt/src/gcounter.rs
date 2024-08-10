@@ -225,9 +225,9 @@ where
     }
 }
 
-impl<I> Decompose<I> for GCounter<I>
+impl<I> Decompose for GCounter<I>
 where
-    I: Eq + Hash,
+    I: Clone + Eq + Hash,
 {
     type Decomposition<'a> = Delta<'a, I> where I: 'a;
 
@@ -241,10 +241,7 @@ where
             .collect()
     }
 
-    fn join(&mut self, deltas: Vec<Self::Decomposition<'_>>)
-    where
-        I: Clone,
-    {
+    fn join(&mut self, deltas: Vec<Self::Decomposition<'_>>) {
         deltas
             .into_iter()
             .flat_map(|d| d.elems)

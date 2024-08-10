@@ -14,7 +14,7 @@ use std::hash::Hash;
 /// The `Decompose` trait allows data types to support not only deltas but irredundant
 /// join-decomposditions. This trait provides a way for clients to use these in the way that they
 /// wish.
-pub trait Decompose<T> {
+pub trait Decompose {
     type Decomposition<'a>
     where
         Self: 'a;
@@ -45,9 +45,7 @@ pub trait Decompose<T> {
     fn split(&self) -> Vec<Self::Decomposition<'_>>;
 
     /// Allows to join several deltas and join them together with `self`.
-    fn join(&mut self, deltas: Vec<Self::Decomposition<'_>>)
-    where
-        T: Clone;
+    fn join(&mut self, deltas: Vec<Self::Decomposition<'_>>);
 
     /// Computes the difference between two different states `self` and `remote`. In essence, it
     /// returns the portion of state present at `self` that does not exist in `remote`.

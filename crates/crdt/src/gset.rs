@@ -237,9 +237,9 @@ impl<T> IntoIterator for GSet<T> {
     }
 }
 
-impl<T> Decompose<T> for GSet<T>
+impl<T> Decompose for GSet<T>
 where
-    T: Eq + Hash,
+    T: Clone + Eq + Hash,
 {
     type Decomposition<'a> = Delta<'a, T> where T: 'a;
 
@@ -252,10 +252,7 @@ where
             .collect()
     }
 
-    fn join(&mut self, deltas: Vec<Self::Decomposition<'_>>)
-    where
-        T: Clone,
-    {
+    fn join(&mut self, deltas: Vec<Self::Decomposition<'_>>) {
         let unknown_elements = deltas
             .into_iter()
             .flat_map(|d| d.elems)
