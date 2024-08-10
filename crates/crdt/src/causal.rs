@@ -3,7 +3,7 @@ use std::{cmp::max, collections::BTreeSet, hash::Hash};
 
 /// A `Dot` is a simple struct that uniquely identifies operations issued by replicas, i.e., it is
 /// a pair (replica id, sequence number).
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Dot<I>(pub I, pub u64);
 
 /// A Dot context is a causality tracking mechanism. It is made of two compoents: a clock and a
@@ -52,6 +52,36 @@ impl<I> DotContext<I>
 where
     I: Eq + Hash,
 {
+    /// Returns the highest dot associated with a given `id`, if any. Essentially, it returns the
+    /// largest dot in the cloud, if exists, or the compressed clock counter, if exists.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use crdt::{Dot, DotContext};
+    ///
+    /// let mut ctx = DotContext::new();
+    /// ctx.next(&"a");
+    /// ctx.next(&"b");
+    /// ctx.next(&"a");
+    ///
+    /// assert_eq!(ctx.get(&"a"), Some(Dot(&"a", 2)));
+    /// assert_eq!(ctx.get(&"b"), Some(Dot(&"b", 1)));
+    /// assert_eq!(ctx.get(&"c"), None);
+    /// ```
+    pub fn get(&self, id: &I) -> Option<Dot<&I>> {
+        self.cloud
+            .iter()
+            .rev()
+            .find(|Dot(rid, _)| rid == id)
+            .map(|Dot(rid, seq)| Dot(rid, *seq))
+            .or_else(|| {
+                self.clock
+                    .get_key_value(id)
+                    .map(|(rid, seq)| Dot(rid, *seq))
+            })
+    }
+
     /// Returns true if `self` is compacted, i.e., for each dot in the cloud is not either coverred
     /// or right next to the clock.
     pub fn is_compacted(&self) -> bool {
@@ -68,6 +98,21 @@ where
     /// Returns `true` if `dot` is contained by the causal context `self`, i.e.,
     /// `dot` is already coverred by the vector clock or `dot` is present in the detached set of
     /// dots.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use crdt::{Dot, DotContext};
+    ///
+    /// let mut ctx = DotContext::new();
+    /// ctx.next(&"a");
+    /// ctx.next(&"a");
+    ///
+    /// assert_eq!(ctx.contains(&Dot(&"a", 1)), true);
+    /// assert_eq!(ctx.contains(&Dot(&"a", 2)), true);
+    /// assert_eq!(ctx.contains(&Dot(&"a", 3)), false);
+    /// assert_eq!(ctx.contains(&Dot(&"a", 4)), false);
+    /// ```
     pub fn contains(&self, dot: &Dot<I>) -> bool {
         let Dot(id, seq) = dot;
         self.clock.get(id).is_some_and(|clock| clock >= seq) || self.cloud.contains(dot)
@@ -140,19 +185,6 @@ where
                 1
             }
         }
-    }
-
-    /// Returns the highest dot associated with a given `id`, if any. Essentially, it returns the
-    /// largest dot in the cloud, if exists, or the compressed clock counter, if exists.
-    ///
-    /// The returned dot will be owned by the caller, thus, `id` will be cloned if a dot exists.
-    pub fn get(&self, id: &I) -> Option<Dot<I>> {
-        self.cloud
-            .iter()
-            .rev()
-            .find(|Dot(rid, _)| rid == id)
-            .cloned()
-            .or_else(|| self.clock.get(id).map(|clock| Dot(id.clone(), *clock)))
     }
 }
 
