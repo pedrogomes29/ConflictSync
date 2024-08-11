@@ -4,7 +4,7 @@ use std::{
     hash::Hash,
 };
 
-use anyhow::{ensure, Ok};
+use anyhow::ensure;
 use fxhash::FxHashSet;
 
 use crate::{Decompose, Extract};

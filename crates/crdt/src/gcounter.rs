@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, cmp::max, hash::Hash};
 
-use anyhow::{ensure, Ok};
+use anyhow::ensure;
 use fxhash::FxHashMap;
 
 use crate::{Decompose, Extract};
