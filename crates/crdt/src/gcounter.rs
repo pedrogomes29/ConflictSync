@@ -39,7 +39,7 @@ pub struct GCounter<I> {
 
 /// The `Delta` type represents a view into the state of a given state. They can be joined with any
 /// other [`GCounter`] in order to synchronize. They are read-only but can be easily converted into a
-/// [`GCounter`] using the trait [`From`].
+/// [`GCounter`] using the trait [`From`]. This `struct` is created upon a mutation of a [`GSet`].
 ///
 /// [`From`]: std::convert::From
 ///
@@ -140,7 +140,7 @@ where
         self.inner.get(id).copied()
     }
 
-    /// Transforms the `self` into a `Delta` object that contains its entire state.
+    /// Extracts a `Delta` containing the entire `GCounter` state.
     pub fn as_delta(&self) -> Delta<'_, I> {
         Delta {
             counter: self,

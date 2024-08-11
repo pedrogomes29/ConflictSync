@@ -9,13 +9,63 @@ use crate::{Decompose, Extract};
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Dot<I>(pub I, pub u64);
 
-// TODO: Docs
+/// A Dot Context is a set of dots represented in a compressed by two components: a vector clock
+/// and a dot cloud. The vector clock component represents the contiguous portion of causal context
+/// whereas the dot cloud admits history gaps.
+///
+/// Given the following set of Dots `s = {("A", 1), ("A", 2), ("A, 3"), ("B", 1), ("B", 4)}` then
+/// the compressed dot context `ctx = { clock: [("A", 3), ("B", 1)], cloud: {("B", 4)} }`.
+///
+/// # Example
+///
+/// ```
+/// use crdt::{Dot, DotContext};
+///
+/// let mut ctx = DotContext::new();
+///
+/// for i in 1..=2 {
+///     ctx.next(&"a"); // Advance the history at replica "a".
+///     assert_eq!(ctx.max(&"a"), i);
+/// }
+///
+/// assert_eq!(ctx.contains(&Dot("a", 1)), true);
+/// assert_eq!(ctx.contains(&Dot("a", 2)), true);
+/// assert_eq!(ctx.contains(&Dot("a", 3)), false);
+/// assert_eq!(ctx.contains(&Dot("b", 1)), false);
+/// assert_eq!(ctx.contains(&Dot("b", 2)), false);
+/// ```
 #[derive(Clone, Debug, Default)]
 pub struct DotContext<I> {
     clock: FxHashMap<I, u64>,
     cloud: BTreeSet<Dot<I>>,
 }
 
+/// The `Delta` type represents a view into the state of a given state. They can be joined with any
+/// other [`DotContext`] in order to synchronize. They are read-only but can be easily converted
+/// into a [`DotContext`] using the trait [`From`].
+///
+/// This `struct` is created upon a mutation of a [`DotContext`].
+///
+/// [`From`]: std::convert::From
+///
+/// # Tips
+///
+/// Deltas can be used when it is required to clone a given state.
+///
+/// ```
+/// use crdt::DotContext;
+///
+/// let mut ctx = DotContext::new();
+///
+/// ctx.next(&"a");
+/// ctx.next(&"b");
+/// ctx.next(&"c");
+///
+/// let delta = ctx.as_delta();
+///
+/// let copy = DotContext::from(delta); // The state of set is cloned here!
+/// assert_eq!(ctx, copy);
+/// ```
 #[derive(Clone, Debug)]
 pub struct Delta<'a, I> {
     ctx: &'a DotContext<I>,
@@ -24,6 +74,7 @@ pub struct Delta<'a, I> {
 }
 
 impl<I> DotContext<I> {
+    /// Creates an empty `DotContext`.
     #[inline]
     #[must_use]
     pub fn new() -> Self {
@@ -33,6 +84,7 @@ impl<I> DotContext<I> {
         }
     }
 
+    /// Returns `true` if the dot context contains no clock entries and no cloud dots.
     pub fn is_empty(&self) -> bool {
         self.clock.is_empty() && self.cloud.is_empty()
     }
@@ -42,6 +94,7 @@ impl<I> DotContext<I>
 where
     I: Eq + Hash,
 {
+    /// Extracts a `Delta` containing the entire `DotContext` state.
     pub fn as_delta(&self) -> Delta<'_, I> {
         Delta {
             ctx: self,
@@ -50,12 +103,16 @@ where
         }
     }
 
+    /// Returns `true`` if `self` is compressed, i.e., each cloud dot is ahead by more than one
+    /// from the clock timestamp.
     pub fn is_compressed(&self) -> bool {
         self.cloud
             .iter()
             .all(|Dot(i, n)| !self.clock.get(i).is_some_and(|clock| *n <= clock + 1))
     }
 
+    /// Returns the largest timestamp for `id` contained in this `DotContext`. If `id` does not
+    /// exist this method returns 0.
     #[inline]
     pub fn max(&self, id: &I) -> u64 {
         let lower_bound = self.clock.get(id).copied().unwrap_or_default();
@@ -75,6 +132,23 @@ impl<I> DotContext<I>
 where
     I: Ord + Eq + Hash,
 {
+    /// Returns `true` if the `DotContext` contains a dot. A dot is contained in a `DotContext` if
+    /// it is coverred by the vector clock component or it is contained in the cloud component.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use crdt::{Dot, DotContext};
+    ///
+    /// let mut ctx = DotContext::new();
+    /// ctx.next(&"a");
+    /// ctx.next(&"a");
+    ///
+    /// assert_eq!(ctx.contains(&Dot(&"a", 1)), true); // Coverred by the clock.
+    /// assert_eq!(ctx.contains(&Dot(&"a", 2)), true); // Coverred by the clock.
+    /// assert_eq!(ctx.contains(&Dot(&"a", 3)), false); // No longer coverred by the clock.
+    /// assert_eq!(ctx.contains(&Dot(&"b", 3)), false); // Not in the cloud dot.
+    /// ```
     pub fn contains(&self, dot: &Dot<I>) -> bool {
         let Dot(i, n) = dot;
         self.clock.get(i).is_some_and(|clock| n <= clock) || self.cloud.contains(dot)
@@ -110,6 +184,11 @@ impl<I> DotContext<I>
 where
     I: Clone + Eq + Ord + Hash,
 {
+    /// Compresses the representation of the dot context.
+    ///
+    /// The algorithm iterates in sorted order thorugh the cloud of dots and determines if each dot
+    /// is either already present in the clock or it is increments the clock. If either of these,
+    /// the dot is moved from the cloud to the clock, otherwise it remains intact.
     pub fn compress(&mut self) {
         self.cloud.retain(|Dot(i, n)| match self.clock.get_mut(i) {
             Some(clock) if *n == (*clock + 1) => {
@@ -221,9 +300,13 @@ where
     }
 }
 
+/// A `DotKind` represents a type of entry that can be extracted from a [`Delta`] that is an
+/// irredundant join-decomposition.
 #[derive(Clone, Debug, Hash)]
 pub enum DotKind<'a, I> {
+    /// An entry in the vector clock component.
     Clock(&'a I, &'a u64),
+    /// An entry contained in the dot cloud component.
     Cloud(&'a I, &'a u64),
 }
 

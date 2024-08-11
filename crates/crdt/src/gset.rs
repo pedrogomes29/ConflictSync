@@ -41,13 +41,13 @@ pub struct GSet<T> {
 
 /// The `Delta` type represents a view into the state of a given state. They can be joined with any
 /// other [`GSet`] in order to synchronize. They are read-only but can be easily converted into a
-/// [`GSet`] using the trait [`From`].
+/// [`GSet`] using the trait [`From`]. This `struct` is created upon a mutation of a [`GSet`].
 ///
 /// [`From`]: std::convert::From
 ///
 /// # Tips
 ///
-/// [`Delta`] can be used when it is required to clone a given state.
+/// Deltas can be used when it is required to clone a given state.
 ///
 /// ```
 /// use crdt::GSet;
@@ -134,7 +134,7 @@ impl<T> GSet<T> {
         self.inner.len()
     }
 
-    /// Transforms the `self` into a `Delta` object that contains its entire state.
+    /// Extracts a `Delta` containing the entire `GSet` state.
     pub fn as_delta(&self) -> Delta<'_, T> {
         Delta {
             set: self,
