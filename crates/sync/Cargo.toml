@@ -1,0 +1,9 @@
+[package]
+name = "sync"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bloom = { version = "0.1.0", path = "../bloom" }
+crdt = { version = "0.1.0", path = "../crdt" }
+telemetry = { version = "0.1.0", path = "../telemetry" }
