@@ -60,16 +60,12 @@ pub trait Decompose {
 /// `Decomposition` is empty or contains more than one item, an error is returned back to the
 /// caller.
 ///
-/// Notice that it imposes a trait bound on the type T, which represents the output type for the
-/// scenario where the extraction succeds. The values extracted are intended to be hashed to enable
-/// efficient digest-driven state-based CRDT synchronization.
-pub trait Extract<T>
-where
-    T: Hash,
-{
-    type Decomposition<'a>
-    where
-        Self: 'a;
+/// Notice that it imposes a trait bound on the associated type `Output`. The values extracted are
+/// intended to be hashed to enable efficient digest-driven state-based CRDT synchronization.
+pub trait Extract {
+    /// The resulting type returned by `extract` if successful.
+    type Output: Hash;
 
-    fn extract(delta: &Self::Decomposition<'_>) -> anyhow::Result<T>;
+    /// Extracts an hashable type from a irredudant join-decomposition.
+    fn extract(&self) -> anyhow::Result<Self::Output>;
 }

@@ -58,7 +58,7 @@ pub struct GCounter<I> {
 ///
 /// let delta = counter.as_delta();
 ///
-/// let copy = GCounter::from(delta);   // The state of counter is cloned here!
+/// let copy = GCounter::from(delta); // The state of counter is cloned here!
 /// assert_eq!(counter, copy);
 /// ```
 #[derive(Clone)]
@@ -270,22 +270,22 @@ where
     }
 }
 
-impl<'b, I> Extract<(&'b I, &'b u64)> for GCounter<I>
+impl<'a, I> Extract for Delta<'a, I>
 where
     I: Hash,
 {
-    type Decomposition<'a> = Delta<'b, I> where I: 'a;
+    type Output = (&'a I, &'a u64);
 
-    fn extract(delta: &Self::Decomposition<'b>) -> anyhow::Result<(&'b I, &'b u64)> {
-        let values = delta.elems.len();
+    fn extract(&self) -> anyhow::Result<Self::Output> {
+        let values = self.elems.len();
         ensure!(
             values == 1,
             "decomposition should contain a single value, but instead got {values} values"
         );
 
-        match delta.elems.first() {
-            Some(value) => Ok(*value),
-            None => unreachable!(),
+        match self.elems.first() {
+            Some(entry) => Ok(*entry),
+            None => unreachable!("decomposition contains at least a single value"),
         }
     }
 }
@@ -383,14 +383,14 @@ mod tests {
         let mut counter = GCounter::new();
 
         let empty_delta = counter.as_delta();
-        let extraction = GCounter::extract(&empty_delta);
+        let extraction = empty_delta.extract();
         assert!(
             extraction.is_err(),
             "extraction is working with empty deltas"
         );
 
         let delta = counter.increment(&"a");
-        let extraction = GCounter::extract(&delta);
+        let extraction = delta.extract();
         let expected = delta
             .elems
             .first()
@@ -399,7 +399,7 @@ mod tests {
 
         counter.increment(&"b");
         let large_delta = counter.as_delta();
-        let extraction = GCounter::extract(&large_delta);
+        let extraction = large_delta.extract();
         assert!(
             extraction.is_err(),
             "extraction is working with large deltas"

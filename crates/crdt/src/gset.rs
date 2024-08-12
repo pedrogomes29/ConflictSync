@@ -60,7 +60,7 @@ pub struct GSet<T> {
 ///
 /// let delta = set.as_delta();
 ///
-/// let copy = GSet::from(delta);   // The state of set is cloned here!
+/// let copy = GSet::from(delta); // The state of set is cloned here!
 /// assert_eq!(set, copy);
 /// ```
 #[derive(Clone)]
@@ -271,22 +271,22 @@ where
     }
 }
 
-impl<'b, T> Extract<&'b T> for GSet<T>
+impl<'a, T> Extract for Delta<'a, T>
 where
     T: Hash,
 {
-    type Decomposition<'a> = Delta<'b, T> where T: 'a;
+    type Output = &'a T;
 
-    fn extract(delta: &Self::Decomposition<'b>) -> anyhow::Result<&'b T> {
-        let values = delta.elems.len();
+    fn extract(&self) -> anyhow::Result<Self::Output> {
+        let values = self.elems.len();
         ensure!(
             values == 1,
             "decomposition should contain a single value, but instead got {values} values"
         );
 
-        match delta.elems.first() {
+        match self.elems.first() {
             Some(value) => Ok(value),
-            None => unreachable!(),
+            None => unreachable!("decomposition contains at least a value"),
         }
     }
 }
@@ -382,7 +382,7 @@ mod tests {
         let mut set = GSet::new();
 
         let empty_delta = set.as_delta();
-        let extraction = GSet::extract(&empty_delta);
+        let extraction = empty_delta.extract();
         assert!(
             extraction.is_err(),
             "extraction is working with empty deltas"
@@ -391,7 +391,7 @@ mod tests {
         let delta = set
             .insert("a")
             .expect("insertion of a new element should produce `Some`");
-        let extraction = GSet::extract(&delta);
+        let extraction = delta.extract();
         let expected = delta
             .elems
             .first()
@@ -400,7 +400,7 @@ mod tests {
 
         set.insert("b");
         let large_delta = set.as_delta();
-        let extraction = GSet::extract(&large_delta);
+        let extraction = large_delta.extract();
         assert!(
             extraction.is_err(),
             "extraction is working with large deltas"

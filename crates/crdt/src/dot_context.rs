@@ -310,24 +310,24 @@ pub enum DotKind<'a, I> {
     Cloud(&'a I, &'a u64),
 }
 
-impl<'b, I> Extract<DotKind<'b, I>> for DotContext<I>
+impl<'a, I> Extract for Delta<'a, I>
 where
     I: Hash,
 {
-    type Decomposition<'a> = Delta<'b, I> where I: 'a;
+    type Output = DotKind<'a, I>;
 
-    fn extract(delta: &Self::Decomposition<'b>) -> anyhow::Result<DotKind<'b, I>> {
-        let values = delta.clock.len() + delta.cloud.len();
+    fn extract(&self) -> anyhow::Result<Self::Output> {
+        let values = self.clock.len() + self.cloud.len();
         ensure!(
             values == 1,
             "decomposition should contain a single value, but instead got {values} values"
         );
 
-        match delta.clock.first() {
+        match self.clock.first() {
             Some((i, n)) => Ok(DotKind::Clock(*i, n)),
-            None => match delta.cloud.first() {
+            None => match self.cloud.first() {
                 Some((i, n)) => Ok(DotKind::Cloud(*i, n)),
-                None => unreachable!("empty decomposition"),
+                None => unreachable!("decompositions contains at least a value"),
             },
         }
     }
@@ -497,7 +497,7 @@ mod tests {
         let empty_ctx = DotContext::<()>::new();
         let empty_delta = empty_ctx.as_delta();
 
-        let extraction = DotContext::extract(&empty_delta);
+        let extraction = empty_delta.extract();
         assert!(
             extraction.is_err(),
             "extraction is working with empty deltas"
@@ -509,7 +509,7 @@ mod tests {
         };
         let clock_delta = ctx.as_delta();
 
-        let extraction = DotContext::extract(&clock_delta);
+        let extraction = clock_delta.extract();
         assert!(matches!(extraction, Ok(DotKind::Clock(&"a", 3))));
 
         let ctx = DotContext {
@@ -518,7 +518,7 @@ mod tests {
         };
         let cloud_delta = ctx.as_delta();
 
-        let extraction = DotContext::extract(&cloud_delta);
+        let extraction = cloud_delta.extract();
         assert!(matches!(extraction, Ok(DotKind::Cloud(&"a", 3))));
 
         let ctx = DotContext {
@@ -527,7 +527,7 @@ mod tests {
         };
         let large_delta = ctx.as_delta();
 
-        let extraction = DotContext::extract(&large_delta);
+        let extraction = large_delta.extract();
         assert!(
             extraction.is_err(),
             "extraction is working with large deltas"
