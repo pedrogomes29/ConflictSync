@@ -1,7 +1,9 @@
 use telemetry::Telemetry;
 
+mod baseline;
 mod classic;
 
+pub use crate::baseline::Baseline;
 pub use crate::classic::Classic;
 
 /// This is the core trait that implements the different sync algorithms for state-based CRDTs. The
