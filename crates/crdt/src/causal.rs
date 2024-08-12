@@ -333,6 +333,17 @@ where
     }
 }
 
+impl<'a, I> Delta<'a, I> {
+    /// Creates an empty `Delta` from a given `DotContext`.
+    pub(crate) fn empty_with(ctx: &'a DotContext<I>) -> Self {
+        Self {
+            ctx,
+            clock: vec![],
+            cloud: vec![],
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
