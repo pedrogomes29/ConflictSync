@@ -54,7 +54,7 @@ pub trait Decompose {
     /// returns the portion of state present at `self` that does not exist in `remote`.
     ///
     /// Each data type provides its own implementations as this method depends on the irredundant
-    /// join-decompositions of `self` and `remote`. This function represents the function $\Delta$
+    /// join-decompositions of `self` and `remote`. This function represents the function `Delta`
     /// first described in this [paper](https://arxiv.org/pdf/1803.02750).
     fn difference<'a>(&'a self, remote: &'a Self) -> Self::Decomposition<'a>;
 }
@@ -71,4 +71,21 @@ pub trait Extract {
 
     /// Extracts an hashable type from a irredudant join-decomposition.
     fn extract(&self) -> anyhow::Result<Self::Output>;
+}
+
+/// The `MemSized` trait is an helper that allows to obtain the memory expenditure of a particular
+/// data type.
+///
+/// Depending on the kind of values held by different data types, one may need to implement a
+/// custom `size_of` function. In such scenarios, this trait can be implemented for the needed
+/// value type.
+pub trait MemSized {
+    /// Returns the size in bytes of `self`.
+    fn size_of(&self) -> usize;
+}
+
+impl MemSized for String {
+    fn size_of(&self) -> usize {
+        self.len()
+    }
 }

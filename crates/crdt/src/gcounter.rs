@@ -1,9 +1,9 @@
-use std::{borrow::Borrow, cmp::max, hash::Hash};
+use std::{borrow::Borrow, cmp::max, hash::Hash, mem};
 
 use anyhow::ensure;
 use fxhash::FxHashMap;
 
-use crate::{Decompose, Extract};
+use crate::{Decompose, Extract, MemSized};
 
 /// A GCounter is a grow-only counter and a state-based CRDTs. THis data type only supports the
 /// increment and count operations. This is also a named data type meaning that replicas who share
@@ -269,6 +269,18 @@ where
     }
 }
 
+impl<I> MemSized for GCounter<I>
+where
+    I: MemSized,
+{
+    fn size_of(&self) -> usize {
+        self.inner
+            .keys()
+            .map(|id| id.size_of() + mem::size_of::<u64>())
+            .sum()
+    }
+}
+
 impl<'a, I> Extract for Delta<'a, I>
 where
     I: Hash,
@@ -293,7 +305,7 @@ where
 mod tests {
     use fxhash::FxHashMap;
 
-    use crate::{Decompose, Extract, GCounter};
+    use crate::{Decompose, Extract, GCounter, MemSized};
 
     #[test]
     fn addition_and_counting_test() {
@@ -403,5 +415,20 @@ mod tests {
             extraction.is_err(),
             "extraction is working with large deltas"
         );
+    }
+
+    #[test]
+    fn size_of_test() {
+        let mut counter = GCounter::new();
+        assert_eq!(counter.size_of(), 0);
+
+        counter.increment(&String::from("a"));
+        assert_eq!(counter.size_of(), 1 + 8);
+
+        counter.increment(&String::from("a"));
+        assert_eq!(counter.size_of(), 1 + 8);
+
+        counter.increment(&String::from("ab"));
+        assert_eq!(counter.size_of(), 1 + 8 + 2 + 8)
     }
 }

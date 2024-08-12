@@ -1,9 +1,9 @@
-use std::{cmp::max, collections::BTreeSet, hash::Hash};
+use std::{cmp::max, collections::BTreeSet, hash::Hash, mem};
 
 use anyhow::ensure;
 use fxhash::FxHashMap;
 
-use crate::{Decompose, Extract};
+use crate::{Decompose, Extract, MemSized};
 
 /// A Dot is pair of the form (replica id, sequence number) that uniquely identifies an operation.
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -342,6 +342,19 @@ where
     }
 }
 
+impl MemSized for DotContext<String> {
+    fn size_of(&self) -> usize {
+        let ids = self
+            .clock
+            .keys()
+            .chain(self.cloud.iter().map(|Dot(id, _)| id))
+            .map(String::len)
+            .sum::<usize>();
+
+        ids + (self.cloud.len() + self.clock.len()) * mem::size_of::<u64>()
+    }
+}
+
 impl<'a, I> Delta<'a, I> {
     /// Creates an empty `Delta` from a given `DotContext`.
     pub(crate) fn empty_with(ctx: &'a DotContext<I>) -> Self {
@@ -359,7 +372,7 @@ mod tests {
 
     use fxhash::FxHashMap;
 
-    use crate::{dot_context::DotKind, Decompose, Dot, DotContext, Extract};
+    use crate::{dot_context::DotKind, Decompose, Dot, DotContext, Extract, MemSized};
 
     #[test]
     fn emptiness_test() {
@@ -541,5 +554,17 @@ mod tests {
             extraction.is_err(),
             "extraction is working with large deltas"
         );
+    }
+
+    #[test]
+    fn size_of_test() {
+        let emtpy_ctx = DotContext::new();
+        assert_eq!(emtpy_ctx.size_of(), 0);
+
+        let ctx = DotContext {
+            clock: FxHashMap::from_iter([(String::from("a"), 3), (String::from("zz"), 3)]),
+            cloud: BTreeSet::from([Dot(String::from("a"), 5), Dot(String::from("b"), 5)]),
+        };
+        assert_eq!(ctx.size_of(), 1 + 8 + 2 + 8 + 1 + 8 + 1 + 8);
     }
 }

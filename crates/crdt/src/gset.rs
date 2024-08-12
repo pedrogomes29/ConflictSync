@@ -7,7 +7,7 @@ use std::{
 use anyhow::ensure;
 use fxhash::FxHashSet;
 
-use crate::{Decompose, Extract};
+use crate::{Decompose, Extract, MemSized};
 
 /// A GSet is a grow-only state and a state-based CRDTs, arguably, the simplest of them all.
 /// As its name suggests, this data type only supports insertion and membership querying.
@@ -270,6 +270,15 @@ where
     }
 }
 
+impl<T> MemSized for GSet<T>
+where
+    T: MemSized,
+{
+    fn size_of(&self) -> usize {
+        self.iter().map(|v| v.size_of()).sum()
+    }
+}
+
 impl<'a, T> Extract for Delta<'a, T>
 where
     T: Hash,
@@ -294,7 +303,7 @@ where
 mod tests {
     use fxhash::FxHashSet;
 
-    use crate::{Decompose, Extract, GSet};
+    use crate::{Decompose, Extract, GSet, MemSized};
 
     #[test]
     fn insertion_and_membership_test() {
@@ -404,5 +413,16 @@ mod tests {
             extraction.is_err(),
             "extraction is working with large deltas"
         );
+    }
+
+    #[test]
+    fn size_of_test() {
+        let mut set = GSet::new();
+        assert_eq!(set.size_of(), 0);
+
+        for (e, s) in [("foo", 3), ("bar", 6), ("qux", 9), ("ferris", 15)] {
+            set.insert(String::from(e));
+            assert_eq!(set.size_of(), s);
+        }
     }
 }
