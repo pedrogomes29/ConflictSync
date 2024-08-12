@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
+mod awset;
 mod dot_context;
 mod gcounter;
 mod gset;
-mod orset;
 
 pub use crate::dot_context::{Dot, DotContext};
 pub use crate::gcounter::GCounter;
