@@ -159,6 +159,16 @@ impl<I> DotContext<I>
 where
     I: Clone + Eq + Hash,
 {
+    /// Advances the history at a given replica `id` and returns a [`Delta`] containing the most
+    /// recent clock entry for the replica `id`.
+    ///
+    /// # Note
+    ///
+    /// This function assumes that replicas know the order of their own operations and do not
+    /// impersonate other replicas. Thus, the returned timestamp in the delta will be equivalent to
+    /// the [`max`] value.
+    ///
+    /// [`max`]: DotContext::max
     pub fn next(&mut self, id: &I) -> Delta<'_, I> {
         match self.clock.get_mut(id) {
             Some(clock) => *clock += 1,
