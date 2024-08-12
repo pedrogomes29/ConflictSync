@@ -350,7 +350,7 @@ mod tests {
 
     use fxhash::FxHashMap;
 
-    use crate::{causal::DotKind, Decompose, Dot, DotContext, Extract};
+    use crate::{dot_context::DotKind, Decompose, Dot, DotContext, Extract};
 
     #[test]
     fn emptiness_test() {
