@@ -127,6 +127,14 @@ where
 {
     type Decomposition<'a> = Delta<'a, I, T> where I: 'a, T: 'a;
 
+    fn as_delta(&self) -> Self::Decomposition<'_> {
+        Delta {
+            set: &self.elems,
+            elems: self.elems.iter().collect(),
+            ctx: self.ctx.as_delta(),
+        }
+    }
+
     fn split(&self) -> Vec<Self::Decomposition<'_>> {
         let elements = self.elems.iter().map(|entry| Delta {
             set: &self.elems,

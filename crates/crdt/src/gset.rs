@@ -50,7 +50,7 @@ pub struct GSet<T> {
 /// Deltas can be used when it is required to clone a given state.
 ///
 /// ```
-/// use crdt::GSet;
+/// use crdt::{Decompose, GSet};
 ///
 /// let mut set = GSet::new();
 ///
@@ -132,14 +132,6 @@ impl<T> GSet<T> {
     /// Returns the number of elements in the set, i.e., its cardinality.
     pub fn len(&self) -> usize {
         self.inner.len()
-    }
-
-    /// Extracts a `Delta` containing the entire `GSet` state.
-    pub fn as_delta(&self) -> Delta<'_, T> {
-        Delta {
-            set: self,
-            elems: self.inner.iter().collect(),
-        }
     }
 }
 
@@ -242,6 +234,13 @@ where
     T: Clone + Eq + Hash,
 {
     type Decomposition<'a> = Delta<'a, T> where T: 'a;
+
+    fn as_delta(&self) -> Self::Decomposition<'_> {
+        Delta {
+            set: self,
+            elems: self.inner.iter().collect(),
+        }
+    }
 
     fn split(&self) -> Vec<Self::Decomposition<'_>> {
         self.iter()

@@ -19,6 +19,9 @@ pub trait Decompose {
     where
         Self: 'a;
 
+    /// Extracts a `Delta` containing the entire `Self` state.
+    fn as_delta(&self) -> Self::Decomposition<'_>;
+
     /// Provides the only irredundant join-decompositions possible over the `self`.
     ///
     /// The implementation depends on the data type, more specifically, on the distributive

@@ -48,7 +48,7 @@ pub struct GCounter<I> {
 /// [`Delta`] can be used when it is required to clone a given state.
 ///
 /// ```
-/// use crdt::GCounter;
+/// use crdt::{Decompose, GCounter};
 ///
 /// let mut counter = GCounter::new();
 ///
@@ -139,14 +139,6 @@ where
     {
         self.inner.get(id).copied()
     }
-
-    /// Extracts a `Delta` containing the entire `GCounter` state.
-    pub fn as_delta(&self) -> Delta<'_, I> {
-        Delta {
-            counter: self,
-            elems: self.inner.iter().collect(),
-        }
-    }
 }
 
 impl<I> GCounter<I>
@@ -230,6 +222,13 @@ where
     I: Clone + Eq + Hash,
 {
     type Decomposition<'a> = Delta<'a, I> where I: 'a;
+
+    fn as_delta(&self) -> Self::Decomposition<'_> {
+        Delta {
+            counter: self,
+            elems: self.inner.iter().collect(),
+        }
+    }
 
     fn split(&self) -> Vec<Self::Decomposition<'_>> {
         self.inner

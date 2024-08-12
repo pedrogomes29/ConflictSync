@@ -53,7 +53,7 @@ pub struct DotContext<I> {
 /// Deltas can be used when it is required to clone a given state.
 ///
 /// ```
-/// use crdt::DotContext;
+/// use crdt::{Decompose, DotContext};
 ///
 /// let mut ctx = DotContext::new();
 ///
@@ -94,15 +94,6 @@ impl<I> DotContext<I>
 where
     I: Eq + Hash,
 {
-    /// Extracts a `Delta` containing the entire `DotContext` state.
-    pub fn as_delta(&self) -> Delta<'_, I> {
-        Delta {
-            ctx: self,
-            clock: self.clock.iter().collect(),
-            cloud: self.cloud.iter().map(|Dot(i, n)| (i, n)).collect(),
-        }
-    }
-
     /// Returns `true`` if `self` is compressed, i.e., each cloud dot is ahead by more than one
     /// from the clock timestamp.
     pub fn is_compressed(&self) -> bool {
@@ -249,6 +240,14 @@ where
     I: Clone + Eq + Ord + Hash,
 {
     type Decomposition<'a> = Delta<'a, I> where I: 'a;
+
+    fn as_delta(&self) -> Self::Decomposition<'_> {
+        Delta {
+            ctx: self,
+            clock: self.clock.iter().collect(),
+            cloud: self.cloud.iter().map(|Dot(i, n)| (i, n)).collect(),
+        }
+    }
 
     fn split(&self) -> Vec<Self::Decomposition<'_>> {
         let clock = self.clock.iter().map(|entry| Delta {
