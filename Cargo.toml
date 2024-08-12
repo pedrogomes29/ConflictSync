@@ -6,8 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = "4.5.15"
 rand = "0.8.4"
 bitvec = "1"
 either = "1.12.0"
-crdt = { path  = "crates/crdt" }
-bloom = { path = "crates/bloom" }
+crdt = { version = "0.1.0", path = "crates/crdt" }
+bloom = { version = "0.1.0", path = "crates/bloom" }
+telemetry = { version = "0.1.0", path = "crates/telemetry" }

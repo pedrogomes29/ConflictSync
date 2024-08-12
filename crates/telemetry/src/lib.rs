@@ -7,6 +7,7 @@ pub trait Telemetry {
 
     fn reset(&mut self);
     fn register(&mut self, event: Self::Event);
+    fn events(&self) -> &Vec<Self::Event>;
     fn collect(&self) -> Self::DataCollection;
 }
 
@@ -28,7 +29,7 @@ impl TransferEvent {
     /// bit/s. Panics if the `bandwidth` <= 0.
     pub fn duration(&self, bandwidth: f64) -> Duration {
         assert!(
-            bandwidth <= 0.0,
+            bandwidth > 0.0,
             "bandwidth should be greater than 0.0 bit/s"
         );
         Duration::from_secs_f64((self.state + self.metadata) as f64 * 8.0 / bandwidth)
@@ -36,21 +37,21 @@ impl TransferEvent {
 }
 
 #[derive(Clone, Debug)]
-pub struct Tracker<T = TransferEvent> {
-    events: Vec<T>,
+pub struct Tracker {
+    events: Vec<TransferEvent>,
     pub upload: f64,
     pub download: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Totals {
-    sent: usize,
-    state: usize,
-    metadata: usize,
-    duration: Duration,
+    pub sent: usize,
+    pub state: usize,
+    pub metadata: usize,
+    pub duration: Duration,
 }
 
-impl<T> Tracker<T> {
+impl Tracker {
     pub const KBPS: f64 = 1.0e3;
     pub const MBPS: f64 = 1.0e6;
     pub const GBPS: f64 = 1.0e9;
@@ -64,7 +65,7 @@ impl<T> Tracker<T> {
     }
 }
 
-impl Telemetry for Tracker<TransferEvent> {
+impl Telemetry for Tracker {
     type Event = TransferEvent;
     type DataCollection = Totals;
 
@@ -74,6 +75,10 @@ impl Telemetry for Tracker<TransferEvent> {
 
     fn register(&mut self, event: Self::Event) {
         self.events.push(event)
+    }
+
+    fn events(&self) -> &Vec<Self::Event> {
+        &self.events
     }
 
     fn collect(&self) -> Self::DataCollection {
