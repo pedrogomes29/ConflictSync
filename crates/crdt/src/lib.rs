@@ -10,6 +10,7 @@ pub use crate::gcounter::GCounter;
 pub use crate::gset::GSet;
 
 use std::hash::Hash;
+use std::mem;
 
 /// The `Decompose` trait allows data types to support not only deltas but irredundant
 /// join-decomposditions. This trait provides a way for clients to use these in the way that they
@@ -89,3 +90,17 @@ impl MemSized for String {
         self.len()
     }
 }
+
+macro_rules! impl_mem_sized_for_nums {
+    ($($t:ty),*) => {
+        $(
+            impl MemSized for $t {
+                fn size_of(&self) -> usize {
+                    mem::size_of::<$t>()
+                }
+            }
+        )*
+    };
+}
+
+impl_mem_sized_for_nums!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64);
