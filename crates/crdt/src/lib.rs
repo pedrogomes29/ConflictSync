@@ -92,13 +92,7 @@ pub trait MemSized {
     fn size_of(&self) -> usize;
 }
 
-impl MemSized for String {
-    fn size_of(&self) -> usize {
-        self.len()
-    }
-}
-
-macro_rules! impl_mem_sized_for_nums {
+macro_rules! impl_memsized_for_nums {
     ($($t:ty),*) => {
         $(
             impl MemSized for $t {
@@ -110,4 +104,18 @@ macro_rules! impl_mem_sized_for_nums {
     };
 }
 
-impl_mem_sized_for_nums!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64);
+macro_rules! impl_memsized_for_strs {
+    ($($t:ty),*) => {
+        $(
+            impl MemSized for $t {
+                fn size_of(&self) -> usize {
+                    self.len()
+                }
+            }
+
+        )*
+    };
+}
+
+impl_memsized_for_nums!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64);
+impl_memsized_for_strs!(String, str);
