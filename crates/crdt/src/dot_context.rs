@@ -73,6 +73,16 @@ pub struct Delta<'a, I> {
     cloud: Vec<(&'a I, &'a u64)>,
 }
 
+/// A `DotKind` represents a type of entry that can be extracted from a [`Delta`] that is an
+/// irredundant join-decomposition.
+#[derive(Clone, Debug, Hash)]
+pub enum DotKind<'a, I> {
+    /// An entry in the vector clock component.
+    Clock(&'a I, &'a u64),
+    /// An entry contained in the dot cloud component.
+    Cloud(&'a I, &'a u64),
+}
+
 impl<I> DotContext<I> {
     /// Creates an empty `DotContext`.
     #[inline]
@@ -316,14 +326,73 @@ where
     }
 }
 
-/// A `DotKind` represents a type of entry that can be extracted from a [`Delta`] that is an
-/// irredundant join-decomposition.
-#[derive(Clone, Debug, Hash)]
-pub enum DotKind<'a, I> {
-    /// An entry in the vector clock component.
-    Clock(&'a I, &'a u64),
-    /// An entry contained in the dot cloud component.
-    Cloud(&'a I, &'a u64),
+impl<I> MemSized for DotContext<I>
+where
+    I: MemSized,
+{
+    fn size_of(&self) -> usize {
+        let ids = self
+            .clock
+            .keys()
+            .chain(self.cloud.iter().map(|Dot(i, _)| i))
+            .map(|i| i.size_of())
+            .sum::<usize>();
+
+        ids + (self.clock.len() + self.cloud.len()) * mem::size_of::<u64>()
+    }
+}
+
+impl<'a, I> Delta<'a, I> {
+    /// Creates an empty `Delta` from a given context.
+    #[inline]
+    pub fn empty_with(ctx: &'a DotContext<I>) -> Self {
+        Self {
+            ctx,
+            clock: vec![],
+            cloud: vec![],
+        }
+    }
+}
+
+impl<'a, I> PartialEq for Delta<'a, I>
+where
+    I: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        if self.clock.len() != other.clock.len() || self.cloud.len() != other.cloud.len() {
+            return false;
+        }
+
+        self.clock.iter().all(|e| other.clock.contains(e))
+            && self.cloud.iter().all(|e| other.cloud.contains(e))
+    }
+}
+
+impl<'b, I> Difference for Delta<'b, I>
+where
+    I: Eq,
+{
+    type Decomposition<'a> = Self where Self: 'a;
+
+    fn difference<'a>(&'a self, remote: &'a Self) -> Self::Decomposition<'a> {
+        let clocks = self
+            .clock
+            .iter()
+            .filter(|(i, n)| !remote.clock.iter().any(|(ri, rn)| i == ri && rn >= n))
+            .copied();
+
+        let cloud = self
+            .cloud
+            .iter()
+            .filter(|d| !remote.cloud.contains(d))
+            .copied();
+
+        Self {
+            ctx: self.ctx,
+            clock: clocks.collect(),
+            cloud: cloud.collect(),
+        }
+    }
 }
 
 impl<'a, I> Extract for Delta<'a, I>
@@ -349,27 +418,19 @@ where
     }
 }
 
-impl MemSized for DotContext<String> {
+impl<'a, I> MemSized for Delta<'a, I>
+where
+    I: MemSized,
+{
     fn size_of(&self) -> usize {
         let ids = self
             .clock
-            .keys()
-            .chain(self.cloud.iter().map(|Dot(id, _)| id))
-            .map(String::len)
+            .iter()
+            .chain(self.cloud.iter())
+            .map(|(i, _)| (*i).size_of())
             .sum::<usize>();
 
-        ids + (self.cloud.len() + self.clock.len()) * mem::size_of::<u64>()
-    }
-}
-
-impl<'a, I> Delta<'a, I> {
-    /// Creates an empty `Delta` from a given `DotContext`.
-    pub(crate) fn empty_with(ctx: &'a DotContext<I>) -> Self {
-        Self {
-            ctx,
-            clock: vec![],
-            cloud: vec![],
-        }
+        ids + (self.clock.len() + self.cloud.len()) * mem::size_of::<u64>()
     }
 }
 
@@ -379,7 +440,7 @@ mod tests {
 
     use fxhash::FxHashMap;
 
-    use crate::{dot_context::DotKind, Decompose, Dot, DotContext, Extract, MemSized};
+    use crate::{dot_context::DotKind, Decompose, Difference, Dot, DotContext, Extract, MemSized};
 
     #[test]
     fn emptiness_test() {
@@ -522,6 +583,24 @@ mod tests {
     }
 
     #[test]
+    fn delta_difference_test() {
+        let local = DotContext {
+            clock: FxHashMap::from_iter([("a", 2), ("b", 3), ("c", 3), ("d", 9)]),
+            cloud: BTreeSet::from([Dot("a", 3), Dot("b", 5), Dot("c", 3)]),
+        };
+
+        let remote = DotContext {
+            clock: FxHashMap::from_iter([("a", 2), ("b", 2), ("c", 4), ("e", 5)]),
+            cloud: BTreeSet::from([Dot("a", 3), Dot("b", 5), Dot("c", 2)]),
+        };
+
+        let diff = local.difference(&remote);
+        let delta_diff = local.as_delta().difference(&remote.as_delta());
+
+        assert_eq!(delta_diff, diff);
+    }
+
+    #[test]
     fn extraction_test() {
         let empty_ctx = DotContext::<()>::new();
         let empty_delta = empty_ctx.as_delta();
@@ -565,13 +644,15 @@ mod tests {
 
     #[test]
     fn size_of_test() {
-        let emtpy_ctx = DotContext::new();
+        let emtpy_ctx = DotContext::<i32>::new();
         assert_eq!(emtpy_ctx.size_of(), 0);
+        assert_eq!(emtpy_ctx.as_delta().size_of(), 0);
 
         let ctx = DotContext {
             clock: FxHashMap::from_iter([(String::from("a"), 3), (String::from("zz"), 3)]),
             cloud: BTreeSet::from([Dot(String::from("a"), 5), Dot(String::from("b"), 5)]),
         };
         assert_eq!(ctx.size_of(), 1 + 8 + 2 + 8 + 1 + 8 + 1 + 8);
+        assert_eq!(ctx.as_delta().size_of(), ctx.size_of());
     }
 }

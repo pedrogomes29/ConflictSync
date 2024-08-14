@@ -61,7 +61,7 @@ pub struct GCounter<I> {
 /// let copy = GCounter::from(delta); // The state of counter is cloned here!
 /// assert_eq!(counter, copy);
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Delta<'a, I> {
     counter: &'a GCounter<I>,
     elems: Vec<(&'a I, &'a u64)>,
@@ -288,6 +288,38 @@ where
     }
 }
 
+impl<'a, I> PartialEq for Delta<'a, I>
+where
+    I: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        if self.elems.len() != other.elems.len() {
+            return false;
+        }
+
+        self.elems.iter().all(|e| other.elems.contains(e))
+    }
+}
+
+impl<'b, I> Difference for Delta<'b, I>
+where
+    I: Eq,
+{
+    type Decomposition<'a> = Self where Self: 'a;
+
+    fn difference<'a>(&'a self, remote: &'a Self) -> Self::Decomposition<'a> {
+        Self {
+            counter: self.counter,
+            elems: self
+                .elems
+                .iter()
+                .filter(|(id, v)| !remote.elems.iter().any(|(rid, rv)| id == rid && rv >= v))
+                .copied()
+                .collect(),
+        }
+    }
+}
+
 impl<'a, I> Extract for Delta<'a, I>
 where
     I: Hash,
@@ -308,11 +340,23 @@ where
     }
 }
 
+impl<'a, I> MemSized for Delta<'a, I>
+where
+    I: MemSized,
+{
+    fn size_of(&self) -> usize {
+        self.elems
+            .iter()
+            .map(|(id, _)| id.size_of() + mem::size_of::<u64>())
+            .sum()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use fxhash::FxHashMap;
 
-    use crate::{Decompose, Extract, GCounter, MemSized};
+    use crate::{Decompose, Difference, Extract, GCounter, MemSized};
 
     #[test]
     fn addition_and_counting_test() {
@@ -397,6 +441,22 @@ mod tests {
     }
 
     #[test]
+    fn delta_difference_test() {
+        let local = GCounter {
+            inner: FxHashMap::from_iter([("a", 2), ("b", 3), ("c", 1), ("e", 1)]),
+        };
+
+        let remote = GCounter {
+            inner: FxHashMap::from_iter([("a", 2), ("b", 1), ("d", 1), ("e", 3)]),
+        };
+
+        let diff = local.difference(&remote);
+        let delta_diff = local.as_delta().difference(&remote.as_delta());
+
+        assert_eq!(delta_diff, diff);
+    }
+
+    #[test]
     fn extraction_test() {
         let mut counter = GCounter::new();
 
@@ -428,14 +488,18 @@ mod tests {
     fn size_of_test() {
         let mut counter = GCounter::new();
         assert_eq!(counter.size_of(), 0);
+        assert_eq!(counter.as_delta().size_of(), 0);
 
         counter.increment(&String::from("a"));
         assert_eq!(counter.size_of(), 1 + 8);
+        assert_eq!(counter.as_delta().size_of(), 1 + 8);
 
         counter.increment(&String::from("a"));
         assert_eq!(counter.size_of(), 1 + 8);
+        assert_eq!(counter.as_delta().size_of(), 1 + 8);
 
         counter.increment(&String::from("ab"));
-        assert_eq!(counter.size_of(), 1 + 8 + 2 + 8)
+        assert_eq!(counter.size_of(), 1 + 8 + 2 + 8);
+        assert_eq!(counter.as_delta().size_of(), 1 + 8 + 2 + 8);
     }
 }

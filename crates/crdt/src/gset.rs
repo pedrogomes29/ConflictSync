@@ -63,7 +63,7 @@ pub struct GSet<T> {
 /// let copy = GSet::from(delta); // The state of set is cloned here!
 /// assert_eq!(set, copy);
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Delta<'a, T> {
     set: &'a GSet<T>,
     elems: Vec<&'a T>,
@@ -286,6 +286,38 @@ where
     }
 }
 
+impl<'a, T> PartialEq for Delta<'a, T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        if self.elems.len() != other.elems.len() {
+            return false;
+        }
+
+        self.elems.iter().all(|v| other.elems.contains(v))
+    }
+}
+
+impl<'b, T> Difference for Delta<'b, T>
+where
+    T: Eq,
+{
+    type Decomposition<'a> = Self where Self: 'a;
+
+    fn difference<'a>(&'a self, remote: &'a Self) -> Self::Decomposition<'a> {
+        Self {
+            set: self.set,
+            elems: self
+                .elems
+                .iter()
+                .copied()
+                .filter(|v| !remote.elems.contains(v))
+                .collect(),
+        }
+    }
+}
+
 impl<'a, T> Extract for Delta<'a, T>
 where
     T: Hash,
@@ -306,11 +338,20 @@ where
     }
 }
 
+impl<'a, T> MemSized for Delta<'a, T>
+where
+    T: MemSized,
+{
+    fn size_of(&self) -> usize {
+        self.elems.iter().map(|v| (*v).size_of()).sum()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use fxhash::FxHashSet;
 
-    use crate::{Decompose, Extract, GSet, MemSized};
+    use crate::{Decompose, Difference, Extract, GSet, MemSized};
 
     #[test]
     fn insertion_and_membership_test() {
@@ -393,6 +434,22 @@ mod tests {
     }
 
     #[test]
+    fn delta_difference_test() {
+        let local = GSet {
+            inner: FxHashSet::from_iter(["a", "b", "c", "e"]),
+        };
+
+        let remote = GSet {
+            inner: FxHashSet::from_iter(["a", "b", "d", "f"]),
+        };
+
+        let diff = local.difference(&remote);
+        let delta_diff = local.as_delta().difference(&remote.as_delta());
+
+        assert_eq!(delta_diff, diff);
+    }
+
+    #[test]
     fn extraction_test() {
         let mut set = GSet::new();
 
@@ -426,10 +483,12 @@ mod tests {
     fn size_of_test() {
         let mut set = GSet::new();
         assert_eq!(set.size_of(), 0);
+        assert_eq!(set.as_delta().size_of(), 0);
 
         for (e, s) in [("foo", 3), ("bar", 6), ("qux", 9), ("ferris", 15)] {
             set.insert(String::from(e));
             assert_eq!(set.size_of(), s);
+            assert_eq!(set.as_delta().size_of(), s);
         }
     }
 }
