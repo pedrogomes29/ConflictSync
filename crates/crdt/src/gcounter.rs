@@ -3,7 +3,7 @@ use std::{borrow::Borrow, cmp::max, hash::Hash, mem};
 use anyhow::ensure;
 use fxhash::FxHashMap;
 
-use crate::{Decompose, Extract, MemSized};
+use crate::{Decompose, Difference, Extract, MemSized};
 
 /// A GCounter is a grow-only counter and a state-based CRDTs. THis data type only supports the
 /// increment and count operations. This is also a named data type meaning that replicas who share
@@ -253,6 +253,13 @@ where
                 };
             })
     }
+}
+
+impl<I> Difference for GCounter<I>
+where
+    I: Eq + Hash,
+{
+    type Decomposition<'a> = Delta<'a, I> where I: 'a;
 
     fn difference<'a>(&'a self, remote: &'a Self) -> Self::Decomposition<'a> {
         Delta {

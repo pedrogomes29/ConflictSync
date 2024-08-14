@@ -7,7 +7,7 @@ use std::{
 use anyhow::ensure;
 use fxhash::FxHashSet;
 
-use crate::{Decompose, Extract, MemSized};
+use crate::{Decompose, Difference, Extract, MemSized};
 
 /// A GSet is a grow-only state and a state-based CRDTs, arguably, the simplest of them all.
 /// As its name suggests, this data type only supports insertion and membership querying.
@@ -261,6 +261,13 @@ where
 
         self.inner.extend(unknown_elements);
     }
+}
+
+impl<T> Difference for GSet<T>
+where
+    T: Eq + Hash,
+{
+    type Decomposition<'a> = Delta<'a, T> where T: 'a;
 
     fn difference<'a>(&'a self, remote: &'a Self) -> Self::Decomposition<'a> {
         Delta {

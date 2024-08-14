@@ -50,13 +50,20 @@ pub trait Decompose {
 
     /// Allows to join several deltas and join them together with `self`.
     fn join(&mut self, deltas: Vec<Self::Decomposition<'_>>);
+}
 
-    /// Computes the difference between two different states `self` and `remote`. In essence, it
-    /// returns the portion of state present at `self` that does not exist in `remote`.
-    ///
-    /// Each data type provides its own implementations as this method depends on the irredundant
-    /// join-decompositions of `self` and `remote`. This function represents the function `Delta`
-    /// first described in this [paper](https://arxiv.org/pdf/1803.02750).
+/// Computes the difference between two different states `self` and `remote`. In essence, it
+/// returns the portion of state present at `self` that does not exist in `remote`.
+///
+/// Each data type provides its own implementations as this method depends on the irredundant
+/// join-decompositions of `self` and `remote`. This function represents the function `Delta`
+/// first described in this [paper](https://arxiv.org/pdf/1803.02750).
+pub trait Difference {
+    type Decomposition<'a>
+    where
+        Self: 'a;
+
+    /// Computes the difference between two different states `self` and `remote`.
     fn difference<'a>(&'a self, remote: &'a Self) -> Self::Decomposition<'a>;
 }
 

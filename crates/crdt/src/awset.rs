@@ -154,10 +154,6 @@ where
     fn join(&mut self, _deltas: Vec<Self::Decomposition<'_>>) {
         todo!()
     }
-
-    fn difference<'a>(&'a self, _remote: &'a Self) -> Self::Decomposition<'a> {
-        todo!()
-    }
 }
 
 #[derive(Clone, Debug, Hash)]

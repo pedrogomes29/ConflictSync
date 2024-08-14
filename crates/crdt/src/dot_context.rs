@@ -3,7 +3,7 @@ use std::{cmp::max, collections::BTreeSet, hash::Hash, mem};
 use anyhow::ensure;
 use fxhash::FxHashMap;
 
-use crate::{Decompose, Extract, MemSized};
+use crate::{Decompose, Difference, Extract, MemSized};
 
 /// A Dot is pair of the form (replica id, sequence number) that uniquely identifies an operation.
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -289,6 +289,13 @@ where
 
         self.compress()
     }
+}
+
+impl<I> Difference for DotContext<I>
+where
+    I: Eq + Ord + Hash,
+{
+    type Decomposition<'a> = Delta<'a, I> where I: 'a;
 
     fn difference<'a>(&'a self, remote: &'a Self) -> Self::Decomposition<'a> {
         let clocks = self
