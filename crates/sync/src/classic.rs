@@ -13,7 +13,7 @@ where
     const HOPS: usize = 2;
     type Tracker = Tracker;
 
-    fn sync(&self, alpha: &mut R, beta: &mut R, tracker: &mut Self::Tracker) {
+    fn sync<'a>(&self, alpha: &'a mut R, beta: &'a mut R, tracker: &mut Self::Tracker) {
         tracker.reset();
 
         let alpha_delta = alpha.as_delta();
