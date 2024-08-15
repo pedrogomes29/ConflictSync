@@ -1,4 +1,4 @@
-use crdt::{Decompose, MemSized};
+use crdt::{Decompose, Difference, MemSized};
 use telemetry::{Telemetry, Tracker, TransferEvent, TransferKind};
 
 use crate::Algorithm;
@@ -8,12 +8,13 @@ pub struct Baseline {}
 
 impl<R> Algorithm<R> for Baseline
 where
-    R: Default + Decompose + MemSized,
+    R: Decompose + Difference + MemSized,
+    for<'a> <R as Difference>::Decomposition<'a>: MemSized + Into<R>,
 {
     const HOPS: usize = 2;
     type Tracker = Tracker;
 
-    fn sync(&self, alpha: &mut R, beta: &mut R, tracker: &mut Self::Tracker) {
+    fn sync<'a>(&self, alpha: &'a mut R, beta: &'a mut R, tracker: &mut Self::Tracker) {
         tracker.reset();
 
         tracker.register(TransferEvent {
@@ -22,16 +23,14 @@ where
             kind: TransferKind::LocalToRemote,
         });
 
-        let optimal_diff = {
-            let mut replica = R::default();
-            replica.join(vec![beta.difference(alpha)]);
-            replica
-        };
+        let optimal_delta = beta.difference(alpha);
         tracker.register(TransferEvent {
-            state: optimal_diff.size_of(),
+            state: optimal_delta.size_of(),
             metadata: 0,
             kind: TransferKind::RemoteToLocal,
         });
+
+        let optimal_diff = optimal_delta.into();
 
         alpha.join(vec![optimal_diff.as_delta()]);
         beta.join(vec![alpha.as_delta()]);

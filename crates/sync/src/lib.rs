@@ -13,6 +13,7 @@ pub trait Algorithm<R> {
     type Tracker: Telemetry;
 
     /// Syncs replicas `alpha` and `beta`, where `alpha` represent the replica that takes the
-    /// initiative over the synchronization procedure.
-    fn sync(&self, alpha: &mut R, beta: &mut R, tracker: &mut Self::Tracker);
+    /// initiative over the synchronization procedure. Upon termination, the tracker cotains the
+    /// transmition events occured.
+    fn sync<'a>(&self, alpha: &'a mut R, beta: &'a mut R, tracker: &mut Self::Tracker);
 }
