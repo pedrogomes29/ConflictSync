@@ -6,8 +6,9 @@ use std::{
 
 use anyhow::ensure;
 use fxhash::FxHashSet;
+use mem_sized::MemSized;
 
-use crate::{Decompose, Difference, Extract, MemSized};
+use crate::{Decompose, Difference, Extract};
 
 /// A GSet is a grow-only state and a state-based CRDTs, arguably, the simplest of them all.
 /// As its name suggests, this data type only supports insertion and membership querying.
@@ -351,7 +352,8 @@ where
 mod tests {
     use fxhash::FxHashSet;
 
-    use crate::{Decompose, Difference, Extract, GSet, MemSized};
+    use crate::{Decompose, Difference, Extract, GSet};
+    use mem_sized::MemSized;
 
     #[test]
     fn insertion_and_membership_test() {

@@ -2,6 +2,7 @@
 use telemetry::Telemetry;
 
 mod baseline;
+mod bloom_buckets;
 mod buckets;
 mod classic;
 

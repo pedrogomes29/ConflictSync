@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.86"
 fxhash = "0.2.1"
+mem_sized = { version = "0.1.0", path = "../mem_sized" }

@@ -40,6 +40,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fxhash",
+ "mem_sized",
 ]
 
 [[package]]
@@ -58,6 +59,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "mem_sized"
+version = "0.1.0"
+
+[[package]]
 name = "radium"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -70,6 +75,7 @@ dependencies = [
  "bloom",
  "crdt",
  "fxhash",
+ "mem_sized",
  "telemetry",
 ]
 

@@ -3,8 +3,9 @@ use std::{
     mem,
 };
 
-use crdt::{Decompose, Difference, Extract, MemSized};
+use crdt::{Decompose, Difference, Extract};
 use fxhash::FxBuildHasher;
+use mem_sized::MemSized;
 use telemetry::{Telemetry, Tracker, TransferEvent, TransferKind};
 
 use crate::Algorithm;

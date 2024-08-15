@@ -2,8 +2,9 @@ use std::{cmp::max, collections::BTreeSet, hash::Hash, mem};
 
 use anyhow::ensure;
 use fxhash::FxHashMap;
+use mem_sized::MemSized;
 
-use crate::{Decompose, Difference, Extract, MemSized};
+use crate::{Decompose, Difference, Extract};
 
 /// A Dot is pair of the form (replica id, sequence number) that uniquely identifies an operation.
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -440,7 +441,8 @@ mod tests {
 
     use fxhash::FxHashMap;
 
-    use crate::{dot_context::DotKind, Decompose, Difference, Dot, DotContext, Extract, MemSized};
+    use crate::{dot_context::DotKind, Decompose, Difference, Dot, DotContext, Extract};
+    use mem_sized::MemSized;
 
     #[test]
     fn emptiness_test() {

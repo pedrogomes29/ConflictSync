@@ -1,4 +1,5 @@
-use crdt::{Decompose, MemSized};
+use crdt::Decompose;
+use mem_sized::MemSized;
 use telemetry::{Telemetry, Tracker, TransferEvent, TransferKind};
 
 use crate::Algorithm;

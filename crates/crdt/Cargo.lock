@@ -20,6 +20,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fxhash",
+ "mem_sized",
 ]
 
 [[package]]
@@ -30,3 +31,7 @@ checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
 dependencies = [
  "byteorder",
 ]
+
+[[package]]
+name = "mem_sized"
+version = "0.1.0"

@@ -7,4 +7,5 @@ edition = "2021"
 bloom = { version = "0.1.0", path = "../bloom" }
 crdt = { version = "0.1.0", path = "../crdt" }
 fxhash = "0.2.1"
+mem_sized = { version = "0.1.0", path = "../mem_sized" }
 telemetry = { version = "0.1.0", path = "../telemetry" }

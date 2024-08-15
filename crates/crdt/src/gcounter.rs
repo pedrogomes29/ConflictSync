@@ -2,8 +2,9 @@ use std::{borrow::Borrow, cmp::max, hash::Hash, mem};
 
 use anyhow::ensure;
 use fxhash::FxHashMap;
+use mem_sized::MemSized;
 
-use crate::{Decompose, Difference, Extract, MemSized};
+use crate::{Decompose, Difference, Extract};
 
 /// A GCounter is a grow-only counter and a state-based CRDTs. THis data type only supports the
 /// increment and count operations. This is also a named data type meaning that replicas who share
@@ -356,7 +357,8 @@ where
 mod tests {
     use fxhash::FxHashMap;
 
-    use crate::{Decompose, Difference, Extract, GCounter, MemSized};
+    use crate::{Decompose, Difference, Extract, GCounter};
+    use mem_sized::MemSized;
 
     #[test]
     fn addition_and_counting_test() {
