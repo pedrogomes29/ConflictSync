@@ -1,6 +1,8 @@
+#![allow(dead_code)]
 use telemetry::Telemetry;
 
 mod baseline;
+mod buckets;
 mod classic;
 
 pub use crate::baseline::Baseline;

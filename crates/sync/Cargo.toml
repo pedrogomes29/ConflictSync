@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 bloom = { version = "0.1.0", path = "../bloom" }
 crdt = { version = "0.1.0", path = "../crdt" }
+fxhash = "0.2.1"
 telemetry = { version = "0.1.0", path = "../telemetry" }
