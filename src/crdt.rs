@@ -280,10 +280,10 @@ impl<T> AWSet<T> {
 
     fn uid(&self) -> u64 {
         let mut rng = rand::thread_rng();
-        let mut id = rng.gen();
+        let mut id = rng.r#gen();
 
         while self.inserted.contains_key(&id) {
-            id = rng.gen();
+            id = rng.r#gen();
         }
 
         id
