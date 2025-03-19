@@ -8,19 +8,20 @@ use std::{
 
 use crate::{
     crdt::{AWSet, GSet, Measure},
-    sync::{baseline::Baseline, bloombuckets::BloomBuckets, buckets::Buckets, Algorithm},
+    sync::{Algorithm, baseline::Baseline, bloombuckets::BloomBuckets, buckets::Buckets},
     tracker::{Bandwidth, DefaultEvent, DefaultTracker, Telemetry},
 };
 
 use crdt::{Decompose, Extract};
 use rand::{
+    SeedableRng,
     distributions::{Alphanumeric, Bernoulli, DistString, Distribution, Uniform},
     rngs::StdRng,
-    SeedableRng,
 };
 
 mod bloom;
 mod crdt;
+mod riblt;
 mod sync;
 mod tracker;
 
