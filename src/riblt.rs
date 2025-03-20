@@ -8,7 +8,9 @@ use std::{
 };
 
 use mapping::SymbolMapping;
-use symbol::{CodedSymbol, Direction, HashedSymbol, Symbol};
+use symbol::{CodedSymbol, Direction, HashedSymbol};
+pub use symbol::Symbol;
+
 
 #[derive(Debug)]
 struct HashedSymbolMapping<'a, T: Symbol> {
@@ -111,6 +113,16 @@ impl<'a, T: Symbol> RatelessIBLT<'a, T> {
         }
     }
 
+    pub fn riblt_from<I>(symbols: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+    {
+        symbols.into_iter().fold(RatelessIBLT::new(), |mut riblt, symbol| {
+            riblt.add_symbol(symbol);
+            riblt
+        })
+    }
+    
     pub fn add_symbol(&mut self, t: T) {
         let hashed_symbol = HashedSymbol::new(t);
         let mut mapping = SymbolMapping::new(hashed_symbol.hash);

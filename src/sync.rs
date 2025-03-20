@@ -7,7 +7,7 @@ use std::{
 use crate::{
     bloom::BloomFilter,
     crdt::{Decompose, Extract},
-    riblt::RatelessIBLT,
+    riblt::{RatelessIBLT, Symbol},
     tracker::Telemetry,
 };
 
@@ -85,24 +85,16 @@ where
 
 pub trait BuildRatelessIBLT<T>
 where
-    T: Decompose<Decomposition = T> + Extract,
+    T: Symbol,
 {
-    fn riblt_from<H: BuildHasher>(
+    fn riblt_from(
         &self,
-        replica: &T,
-        hasher: &H,
-    ) -> (HashMap<u64, T>, RatelessIBLT<u64>) {
+        symbols: &[T],
+    ) -> RatelessIBLT<T> {
         let mut riblt = RatelessIBLT::new();
-        let mut hash_to_decomposition = HashMap::new();
-
-        replica.split().into_iter().for_each(|d| {
-            let item = d.extract();
-            let item_hash = hasher.hash_one(item);
-
-            hash_to_decomposition.insert(item_hash, d);
-            riblt.add_symbol(item_hash);
+        symbols.iter().for_each(|symbol|{
+            riblt.add_symbol(symbol.clone());
         });
-
-        (hash_to_decomposition, riblt)
+        riblt
     }
 }

@@ -1,9 +1,10 @@
-use std::{fmt::Display, hash::RandomState, marker::PhantomData, mem};
+use std::{collections::HashMap, fmt::Display, hash::RandomState, marker::PhantomData, mem};
 
 use crate::{
-    crdt::{Decompose, Extract, Measure},
-    tracker::{DefaultEvent, DefaultTracker, Telemetry},
+    crdt::{Decompose, Extract, Measure}, riblt::{RatelessIBLT, Symbol}, tracker::{DefaultEvent, DefaultTracker, Telemetry}
 };
+
+use std::hash::BuildHasher;
 
 use super::{Algorithm, BuildRatelessIBLT};
 
@@ -27,7 +28,7 @@ impl<T> Display for RibltHashes<T> {
     }
 }
 
-impl<T> BuildRatelessIBLT<T> for RibltHashes<T> where T: Clone + Decompose<Decomposition = T> + Extract {}
+impl<T> BuildRatelessIBLT<T> for RibltHashes<T> where T: Symbol{}
 
 impl<T> Algorithm<T> for RibltHashes<T>
 where
@@ -46,10 +47,27 @@ where
 
         // 1. Create a rateless IBLT from the local join-deocompositions and send it to the remote replica.
         let hasher = RandomState::new();
-        let (local_hashes, mut local_iblt) = self.riblt_from(&local, &hasher);
+        let mut local_hashes = HashMap::new();
+
+        local.split().into_iter().for_each(|d| {
+            let item = d.extract();
+            let item_hash = hasher.hash_one(item);
+
+            local_hashes.insert(item_hash, d);
+        });
+        let mut local_iblt = RatelessIBLT::riblt_from(local_hashes.keys().cloned());
+
 
         // 2. Repeat the procedure from 1., but now on the remote replica.
-        let (remote_hashes, mut remote_iblt) = self.riblt_from(&remote, &hasher);
+        let mut remote_hashes = HashMap::new();
+
+        remote.split().into_iter().for_each(|d| {
+            let item = d.extract();
+            let item_hash = hasher.hash_one(item);
+
+            remote_hashes.insert(item_hash, d);
+        });
+        let mut remote_iblt = RatelessIBLT::riblt_from(remote_hashes.keys().cloned());
 
 
         // 3. Send Coded symbols until the remote replica has enough to decode all the differences
@@ -136,11 +154,13 @@ mod tests {
             gset
         };
 
+
         let (download, upload) = (Bandwidth::Kbps(0.5), Bandwidth::Kbps(0.5));
         let mut tracker = DefaultTracker::new(download, upload);
         let buckets = RibltHashes::new();
 
         buckets.sync(&mut local, &mut remote, &mut tracker);
+
 
         assert_eq!(tracker.false_matches(), 0);
     }
