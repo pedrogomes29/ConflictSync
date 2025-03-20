@@ -8,9 +8,8 @@ use std::{
 };
 
 use mapping::SymbolMapping;
-use symbol::{CodedSymbol, Direction, HashedSymbol};
 pub use symbol::Symbol;
-
+use symbol::{CodedSymbol, Direction, HashedSymbol};
 
 #[derive(Debug)]
 struct HashedSymbolMapping<'a, T: Symbol> {
@@ -117,12 +116,14 @@ impl<'a, T: Symbol> RatelessIBLT<'a, T> {
     where
         I: IntoIterator<Item = T>,
     {
-        symbols.into_iter().fold(RatelessIBLT::new(), |mut riblt, symbol| {
-            riblt.add_symbol(symbol);
-            riblt
-        })
+        symbols
+            .into_iter()
+            .fold(RatelessIBLT::new(), |mut riblt, symbol| {
+                riblt.add_symbol(symbol);
+                riblt
+            })
     }
-    
+
     pub fn add_symbol(&mut self, t: T) {
         let hashed_symbol = HashedSymbol::new(t);
         let mut mapping = SymbolMapping::new(hashed_symbol.hash);
@@ -364,7 +365,6 @@ mod tests {
         }
 
         let sketch_size = iblt1.find_all_differences(&mut iblt2);
-        println!("Sketch size required: {sketch_size}");
 
         let local_only_symbols: Vec<i32> = iblt1.get_local_only_symbols();
         assert!(
@@ -402,7 +402,6 @@ mod tests {
         iblt2.add_symbol(201);
 
         let sketch_size = iblt1.find_all_differences(&mut iblt2);
-        println!("Sketch size required: {sketch_size}");
 
         let local_only_symbols: Vec<i32> = iblt1.get_local_only_symbols();
         let remote_only_symbols: Vec<i32> = iblt1.get_remote_only_symbols();
@@ -424,8 +423,5 @@ mod tests {
                 "Missing {symbol} in remote-only symbols"
             );
         }
-
-        println!("Local-only symbols found: {:?}", local_only_symbols);
-        println!("Remote-only symbols found: {:?}", remote_only_symbols);
     }
 }

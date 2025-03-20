@@ -15,6 +15,7 @@ pub mod baseline;
 pub mod bloom;
 pub mod bloombuckets;
 pub mod buckets;
+pub mod ribltbuckets;
 pub mod riblthashes;
 
 pub trait Algorithm<T> {
@@ -49,6 +50,29 @@ where
         buckets
             .iter()
             .map(|b| hasher.hash_one(b.keys().fold(String::new(), |acc, h| format!("{acc}{h}"))))
+            .collect()
+    }
+
+    fn hashes_to_bucket_index<H: BuildHasher>(
+        buckets: &[BTreeMap<u64, T>],
+        hasher: &H,
+    ) -> HashMap<u64, usize> {
+        buckets
+            .iter()
+            .enumerate()
+            .map(|(idx, b)| {
+                (
+                    (hasher.hash_one(
+                        b.keys()
+                            //use idx as seed such that different empty buckets have different hashes
+                            //avoids adding the same element to the IBLT twice
+                            .fold(String::from(format!("bucket{idx}")), |acc, h| {
+                                format!("{acc}{h}")
+                            }),
+                    )),
+                    idx,
+                )
+            })
             .collect()
     }
 }
@@ -87,12 +111,9 @@ pub trait BuildRatelessIBLT<T>
 where
     T: Symbol,
 {
-    fn riblt_from(
-        &self,
-        symbols: &[T],
-    ) -> RatelessIBLT<T> {
+    fn riblt_from(&self, symbols: &[T]) -> RatelessIBLT<T> {
         let mut riblt = RatelessIBLT::new();
-        symbols.iter().for_each(|symbol|{
+        symbols.iter().for_each(|symbol| {
             riblt.add_symbol(symbol.clone());
         });
         riblt

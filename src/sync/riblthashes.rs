@@ -1,7 +1,9 @@
 use std::{collections::HashMap, fmt::Display, hash::RandomState, marker::PhantomData, mem};
 
 use crate::{
-    crdt::{Decompose, Extract, Measure}, riblt::{RatelessIBLT, Symbol}, tracker::{DefaultEvent, DefaultTracker, Telemetry}
+    crdt::{Decompose, Extract, Measure},
+    riblt::{RatelessIBLT, Symbol},
+    tracker::{DefaultEvent, DefaultTracker, Telemetry},
 };
 
 use std::hash::BuildHasher;
@@ -28,7 +30,7 @@ impl<T> Display for RibltHashes<T> {
     }
 }
 
-impl<T> BuildRatelessIBLT<T> for RibltHashes<T> where T: Symbol{}
+impl<T> BuildRatelessIBLT<T> for RibltHashes<T> where T: Symbol {}
 
 impl<T> Algorithm<T> for RibltHashes<T>
 where
@@ -45,7 +47,8 @@ where
             "tracker should be ready, i.e., no captured events and not finished"
         );
 
-        // 1. Create a rateless IBLT from the local join-deocompositions and send it to the remote replica.
+        // 1. Create a rateless IBLT from the hash of the local join-deocompositions and send it
+        //    to the remote replica.
         let hasher = RandomState::new();
         let mut local_hashes = HashMap::new();
 
@@ -56,7 +59,6 @@ where
             local_hashes.insert(item_hash, d);
         });
         let mut local_iblt = RatelessIBLT::riblt_from(local_hashes.keys().cloned());
-
 
         // 2. Repeat the procedure from 1., but now on the remote replica.
         let mut remote_hashes = HashMap::new();
@@ -69,7 +71,6 @@ where
         });
         let mut remote_iblt = RatelessIBLT::riblt_from(remote_hashes.keys().cloned());
 
-
         // 3. Send Coded symbols until the remote replica has enough to decode all the differences
         remote_iblt.find_all_differences(&mut local_iblt);
         let sketch_size = local_iblt.sketch.len();
@@ -77,49 +78,52 @@ where
 
         tracker.register(DefaultEvent::LocalToRemote {
             state: 0,
-            metadata: sketch_size*CODED_SYMBOL_SIZE,
+            metadata: sketch_size * CODED_SYMBOL_SIZE,
             upload: tracker.upload(),
         });
 
         let remote_only_hashes = remote_iblt.get_local_only_symbols();
         let local_only_hashes = remote_iblt.get_remote_only_symbols();
 
-        let remote_only_decompositions: Vec<_> = remote_only_hashes.into_iter().map(|hash| {
-            remote_hashes[&hash].clone()
-        }).collect();
+        let remote_only_decompositions: Vec<_> = remote_only_hashes
+            .into_iter()
+            .map(|hash| remote_hashes[&hash].clone())
+            .collect();
 
-
-        // 4. Send remote only state corresponding to remote only hashes, 
-        //    Send local only hashes to request for local only state 
+        // 4. Send remote only state corresponding to remote only hashes,
+        //    Send local only hashes to request for local only state
         tracker.register(DefaultEvent::RemoteToLocal {
-            state: remote_only_decompositions.iter().map(<T as Measure>::size_of).sum(),
+            state: remote_only_decompositions
+                .iter()
+                .map(<T as Measure>::size_of)
+                .sum(),
             metadata: local_only_hashes.iter().count() * mem::size_of::<u64>(),
             download: tracker.download(),
         });
 
+        let local_only_decompositions: Vec<_> = local_only_hashes
+            .into_iter()
+            .map(|hash| local_hashes[&hash].clone())
+            .collect();
 
-        let local_only_decompositions: Vec<_> = local_only_hashes.into_iter().map(|hash| {
-            local_hashes[&hash].clone()
-        }).collect();
-
-
-        // 5. Send local only state corresponding to local only hashes, 
+        // 5. Send local only state corresponding to local only hashes,
         tracker.register(DefaultEvent::LocalToRemote {
-            state: local_only_decompositions.iter().map(<T as Measure>::size_of).sum(),
+            state: local_only_decompositions
+                .iter()
+                .map(<T as Measure>::size_of)
+                .sum(),
             metadata: 0,
             upload: tracker.upload(),
         });
 
-
         // 5. Join the appropriate join-decompositions to each replica.
         local.join(remote_only_decompositions);
-        remote.join (local_only_decompositions);
-        
+        remote.join(local_only_decompositions);
+
         // 6. Sanity check.
         tracker.finish(<T as Measure>::false_matches(local, remote));
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -154,13 +158,11 @@ mod tests {
             gset
         };
 
-
         let (download, upload) = (Bandwidth::Kbps(0.5), Bandwidth::Kbps(0.5));
         let mut tracker = DefaultTracker::new(download, upload);
         let buckets = RibltHashes::new();
 
         buckets.sync(&mut local, &mut remote, &mut tracker);
-
 
         assert_eq!(tracker.false_matches(), 0);
     }
