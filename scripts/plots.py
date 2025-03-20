@@ -94,6 +94,7 @@ def read_experiments(f: TextIOWrapper) -> list[Experiment]:
             while parts := f.readline().rstrip().split():
                 algo, *metrics = parts
                 algo = read_algorithm(algo)
+                print(algo)
                 metrics = Metrics(int(metrics[0]), int(metrics[1]), float(metrics[2]))
 
                 m[algo].append(metrics)
@@ -215,10 +216,15 @@ def main():
     for file in args.files:
         # File reading
         exps = read_experiments(file)
+
+        colormap = plt.cm.get_cmap('tab20', 20)
+        colors = [colormap(i) for i in range(20)]
+
         colors = {
-            a: p["color"]
-            for a, p in zip(exps[1].runs.keys(), plt.rcParams["axes.prop_cycle"])
+            a: colors[i]
+            for i, a in enumerate(exps[1].runs.keys())
         }
+
 
         # Display the ratios
         if not args.quiet:
