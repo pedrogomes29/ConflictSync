@@ -97,6 +97,7 @@ def read_experiments(f: TextIOWrapper) -> list[Experiment]:
                 metrics = Metrics(int(metrics[0]), int(metrics[1]), float(metrics[2]))
 
                 m[algo].append(metrics)
+        print("\n")
 
     assert len(headers) == 3
     assert all(
@@ -111,7 +112,7 @@ def fmt_label(label: Algorithm) -> str:
         return label.name
 
     name = "".join(p[:2] for p in label.name.split("+"))
-    params = f"[{", ".join(f"${k} = {v}$" for k, v in label.params.items())}]"
+    params = f'[{", ".join(f"${k} = {v}$" for k, v in label.params.items())}]'
     return f"{name} {params}"
 
 

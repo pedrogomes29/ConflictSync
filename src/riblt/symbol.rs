@@ -1,7 +1,7 @@
 use std::collections::hash_map::DefaultHasher;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::{BitXor, BitXorAssign};
-use std::fmt::Debug;
 
 #[derive(Clone, Copy)]
 pub enum Direction {
@@ -18,7 +18,10 @@ impl Direction {
     }
 }
 
-pub trait Symbol: Hash + BitXor + BitXorAssign + PartialEq + Clone + Default + Debug + std::cmp::Eq {}
+pub trait Symbol:
+    Hash + BitXor + BitXorAssign + PartialEq + Clone + Default + Debug + std::cmp::Eq
+{
+}
 
 #[derive(Clone, Debug)]
 pub struct HashedSymbol<T: Symbol> {

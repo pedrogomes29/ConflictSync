@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     hash::{BuildHasher, RandomState},
     mem,
 };
@@ -7,6 +7,7 @@ use std::{
 use crate::{
     bloom::BloomFilter,
     crdt::{Decompose, Extract},
+    riblt::RatelessIBLT,
     tracker::Telemetry,
 };
 
@@ -14,6 +15,7 @@ pub mod baseline;
 pub mod bloom;
 pub mod bloombuckets;
 pub mod buckets;
+pub mod riblthashes;
 
 pub trait Algorithm<T> {
     type Tracker: Telemetry;
@@ -78,5 +80,29 @@ where
         filter.bitslice().chunks(8).count()
             + mem::size_of::<RandomState>() * 2
             + mem::size_of::<u64>()
+    }
+}
+
+pub trait BuildRatelessIBLT<T>
+where
+    T: Decompose<Decomposition = T> + Extract,
+{
+    fn riblt_from<H: BuildHasher>(
+        &self,
+        replica: &T,
+        hasher: &H,
+    ) -> (HashMap<u64, T>, RatelessIBLT<u64>) {
+        let mut riblt = RatelessIBLT::new();
+        let mut hash_to_decomposition = HashMap::new();
+
+        replica.split().into_iter().for_each(|d| {
+            let item = d.extract();
+            let item_hash = hasher.hash_one(item);
+
+            hash_to_decomposition.insert(item_hash, d);
+            riblt.add_symbol(item_hash);
+        });
+
+        (hash_to_decomposition, riblt)
     }
 }

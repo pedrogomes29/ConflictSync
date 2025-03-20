@@ -18,6 +18,7 @@ use rand::{
     distributions::{Alphanumeric, Bernoulli, DistString, Distribution, Uniform},
     rngs::StdRng,
 };
+use sync::riblthashes::RibltHashes;
 
 mod bloom;
 mod crdt;
@@ -183,6 +184,14 @@ where
         );
 
         let algo = Baseline::new();
+        run(
+            &algo,
+            similar,
+            (local.clone(), upload),
+            (remote.clone(), download),
+        );
+
+        let algo = RibltHashes::new();
         run(
             &algo,
             similar,

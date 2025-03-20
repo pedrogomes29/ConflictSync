@@ -2,7 +2,9 @@ mod mapping;
 mod symbol;
 
 use std::{
-    cmp::{Ordering, Reverse}, collections::{BinaryHeap, HashSet}, hash::{DefaultHasher, Hasher}
+    cmp::{Ordering, Reverse},
+    collections::{BinaryHeap, HashSet},
+    hash::{DefaultHasher, Hasher},
 };
 
 use mapping::SymbolMapping;
@@ -72,9 +74,15 @@ pub struct Sketch<T: Symbol> {
     coded_symbols: Vec<CodedSymbol<T>>,
 }
 
-impl<T:Symbol> Sketch<T> {
-    fn new() -> Self{
-        Self { coded_symbols: Vec::new() }
+impl<T: Symbol> Sketch<T> {
+    fn new() -> Self {
+        Self {
+            coded_symbols: Vec::new(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        return self.coded_symbols.len();
     }
 }
 
@@ -89,7 +97,6 @@ pub struct RatelessIBLT<'a, T: Symbol> {
     decoded: HashSet<T>,
 }
 
-
 impl<'a, T: Symbol> RatelessIBLT<'a, T> {
     pub fn new() -> Self {
         RatelessIBLT {
@@ -103,7 +110,6 @@ impl<'a, T: Symbol> RatelessIBLT<'a, T> {
             decoded: HashSet::new(),
         }
     }
-
 
     pub fn add_symbol(&mut self, t: T) {
         let hashed_symbol = HashedSymbol::new(t);
@@ -120,7 +126,6 @@ impl<'a, T: Symbol> RatelessIBLT<'a, T> {
                 source_symbol_idx: self.source_symbols.len() - 1,
                 last_mapping_idx: first_mapping_idx,
             }));
-
     }
 
     fn peel(&mut self) {
@@ -170,7 +175,8 @@ impl<'a, T: Symbol> RatelessIBLT<'a, T> {
         let mut hasher = DefaultHasher::new();
         c1.hashed_symbol.symbol.hash(&mut hasher);
         let symbol_hash = hasher.finish();
-        if symbol_hash == c1.hashed_symbol.hash && !self.decoded.contains(&c1.hashed_symbol.symbol){
+        if symbol_hash == c1.hashed_symbol.hash && !self.decoded.contains(&c1.hashed_symbol.symbol)
+        {
             match c1.count {
                 1 => {
                     let hashed_symbol = c1.hashed_symbol.clone();
@@ -210,7 +216,6 @@ impl<'a, T: Symbol> RatelessIBLT<'a, T> {
                             decoded_symbol_idx: DecodedSymbolIdx::RemoteIdx(new_symbol_idx),
                             last_mapping_idx: first_mapping_idx,
                         }));
-                    
                 }
                 _ => (),
             }
@@ -224,7 +229,7 @@ impl<'a, T: Symbol> RatelessIBLT<'a, T> {
             "Subtracting sketches of different sizes"
         );
 
-        let start = match self.subtracted_index{
+        let start = match self.subtracted_index {
             Some(subtracted_index) => subtracted_index + 1,
             None => 0,
         };
@@ -251,9 +256,9 @@ impl<'a, T: Symbol> RatelessIBLT<'a, T> {
 
     pub fn extend_sketch(&mut self, extra_size: usize) {
         let current_len = self.sketch.coded_symbols.len();
-        let extended_len = current_len+extra_size;
+        let extended_len = current_len + extra_size;
 
-        for _ in current_len..current_len+extra_size {
+        for _ in current_len..current_len + extra_size {
             self.sketch.coded_symbols.push(CodedSymbol::<T>::new());
         }
 
@@ -287,25 +292,27 @@ impl<'a, T: Symbol> RatelessIBLT<'a, T> {
         }
     }
 
-    pub fn is_decoded(&self) -> bool{
+    pub fn is_decoded(&self) -> bool {
         //all source symbols map to the first coded symbol
         //if it is decoded, all symbols have been decoded
-        let first_symbol =  &self.sketch.coded_symbols[0];
-        first_symbol.hashed_symbol.hash==0 && first_symbol.hashed_symbol.symbol==T::default() && first_symbol.count == 0
+        let first_symbol = &self.sketch.coded_symbols[0];
+        first_symbol.hashed_symbol.hash == 0
+            && first_symbol.hashed_symbol.symbol == T::default()
+            && first_symbol.count == 0
     }
 
-    pub fn get_local_only_symbols(&self) -> Vec<T>{
+    pub fn get_local_only_symbols(&self) -> Vec<T> {
         self.local_only
-        .iter()
-        .map(|hashed_symbol_mapping| hashed_symbol_mapping.hashed_symbol.symbol.clone())
-        .collect()
+            .iter()
+            .map(|hashed_symbol_mapping| hashed_symbol_mapping.hashed_symbol.symbol.clone())
+            .collect()
     }
 
-    pub fn get_remote_only_symbols(&self) -> Vec<T>{
+    pub fn get_remote_only_symbols(&self) -> Vec<T> {
         self.remote_only
-        .iter()
-        .map(|hashed_symbol_mapping| hashed_symbol_mapping.hashed_symbol.symbol.clone())
-        .collect()
+            .iter()
+            .map(|hashed_symbol_mapping| hashed_symbol_mapping.hashed_symbol.symbol.clone())
+            .collect()
     }
 
     pub fn find_all_differences(&mut self, iblt2: &mut RatelessIBLT<T>) -> usize {
@@ -322,6 +329,7 @@ impl<'a, T: Symbol> RatelessIBLT<'a, T> {
     }
 }
 
+impl Symbol for u64 {}
 
 #[cfg(test)]
 mod tests {
@@ -329,39 +337,43 @@ mod tests {
 
     impl Symbol for i32 {}
 
-
     #[test]
     fn test_rateless_iblt_subtract_and_decode() {
         // Create two rateless IBLTs with different symbol sets
         let mut iblt1 = RatelessIBLT::<i32>::new();
         let mut iblt2 = RatelessIBLT::<i32>::new();
 
-        for i in 1..=100{
+        for i in 1..=100 {
             iblt1.add_symbol(i);
         }
 
-        for i in 2..=101{
+        for i in 2..=101 {
             iblt2.add_symbol(i);
         }
-
 
         let sketch_size = iblt1.find_all_differences(&mut iblt2);
         println!("Sketch size required: {sketch_size}");
 
         let local_only_symbols: Vec<i32> = iblt1.get_local_only_symbols();
-        assert!(local_only_symbols.contains(&1), "Expected 1 in local_only, but found {:?}", local_only_symbols);
+        assert!(
+            local_only_symbols.contains(&1),
+            "Expected 1 in local_only, but found {:?}",
+            local_only_symbols
+        );
 
         let remote_only_symbols: Vec<i32> = iblt1.get_remote_only_symbols();
-        assert!(remote_only_symbols.contains(&101), "Expected 101 in remote_only, but found {:?}", remote_only_symbols);
-        
+        assert!(
+            remote_only_symbols.contains(&101),
+            "Expected 101 in remote_only, but found {:?}",
+            remote_only_symbols
+        );
     }
-
 
     #[test]
     fn test_rateless_iblt_complex_subtract_and_decode() {
         let mut iblt1 = RatelessIBLT::<i32>::new();
         let mut iblt2 = RatelessIBLT::<i32>::new();
-    
+
         // iblt1 contains {1, 2, 3, ..., 50, 101, 102, 103}
         for i in 1..=50 {
             iblt1.add_symbol(i);
@@ -369,32 +381,38 @@ mod tests {
         iblt1.add_symbol(101);
         iblt1.add_symbol(102);
         iblt1.add_symbol(103);
-    
+
         // iblt2 contains {25, 26, ..., 75, 200, 201}
         for i in 25..=75 {
             iblt2.add_symbol(i);
         }
         iblt2.add_symbol(200);
         iblt2.add_symbol(201);
-    
+
         let sketch_size = iblt1.find_all_differences(&mut iblt2);
         println!("Sketch size required: {sketch_size}");
-    
+
         let local_only_symbols: Vec<i32> = iblt1.get_local_only_symbols();
         let remote_only_symbols: Vec<i32> = iblt1.get_remote_only_symbols();
-    
+
         // Expected local-only: {1, 2, ..., 24, 101, 102, 103}
         let expected_local: Vec<i32> = (1..25).chain([101, 102, 103]).collect();
         for &symbol in &expected_local {
-            assert!(local_only_symbols.contains(&symbol), "Missing {symbol} in local-only symbols");
+            assert!(
+                local_only_symbols.contains(&symbol),
+                "Missing {symbol} in local-only symbols"
+            );
         }
-    
+
         // Expected remote-only: {51, ..., 75, 200, 201}
         let expected_remote: Vec<i32> = (51..=75).chain([200, 201]).collect();
         for &symbol in &expected_remote {
-            assert!(remote_only_symbols.contains(&symbol), "Missing {symbol} in remote-only symbols");
+            assert!(
+                remote_only_symbols.contains(&symbol),
+                "Missing {symbol} in remote-only symbols"
+            );
         }
-    
+
         println!("Local-only symbols found: {:?}", local_only_symbols);
         println!("Remote-only symbols found: {:?}", remote_only_symbols);
     }
