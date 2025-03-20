@@ -18,7 +18,9 @@ use rand::{
     distributions::{Alphanumeric, Bernoulli, DistString, Distribution, Uniform},
     rngs::StdRng,
 };
-use sync::{ribltbuckets::RibltBuckets, riblthashes::RibltHashes};
+use sync::{
+    bloomriblthashes::BloomRibltHashes, bucketsriblt::RibltBuckets, riblthashes::RibltHashes,
+};
 
 mod bloom;
 mod crdt;
@@ -199,6 +201,7 @@ where
             (remote.clone(), download),
         );
 
+        /*
         for lf in [0.2, 1.0, 5.0] {
             let algo = Buckets::new(lf);
             run(
@@ -211,6 +214,17 @@ where
 
         for lf in [0.2, 1.0, 5.0] {
             let algo = RibltBuckets::new(lf);
+            run(
+                &algo,
+                similar,
+                (local.clone(), upload),
+                (remote.clone(), download),
+            );
+        }
+        */
+
+        for fpr in [0.01, 0.1, 0.25] {
+            let algo = BloomRibltHashes::new(fpr);
             run(
                 &algo,
                 similar,

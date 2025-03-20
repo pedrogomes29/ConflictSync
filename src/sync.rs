@@ -14,8 +14,9 @@ use crate::{
 pub mod baseline;
 pub mod bloom;
 pub mod bloombuckets;
+pub mod bloomriblthashes;
 pub mod buckets;
-pub mod ribltbuckets;
+pub mod bucketsriblt;
 pub mod riblthashes;
 
 pub trait Algorithm<T> {
