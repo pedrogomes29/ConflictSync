@@ -14,6 +14,7 @@ use crate::{
 pub mod baseline;
 pub mod bloom;
 pub mod bloombuckets;
+pub mod bloomribltbuckets;
 pub mod bloomriblthashes;
 pub mod buckets;
 pub mod bucketsriblt;
@@ -36,7 +37,6 @@ where
         hasher: &H,
     ) -> Vec<BTreeMap<u64, T>> {
         let mut buckets = vec![BTreeMap::new(); len];
-
         replica.split().into_iter().for_each(|d| {
             let hash = hasher.hash_one(d.extract());
             let idx = usize::try_from(hash).unwrap() % len;

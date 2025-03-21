@@ -1,10 +1,4 @@
-use std::{
-    collections::HashMap,
-    fmt::Display,
-    hash::{BuildHasher, RandomState},
-    marker::PhantomData,
-    mem,
-};
+use std::{collections::HashMap, fmt::Display, hash::RandomState, marker::PhantomData, mem};
 
 use crate::{
     crdt::{Decompose, Extract, Measure},
@@ -15,47 +9,58 @@ use crate::{
 use super::{Algorithm, BuildFilter, Dispatcher};
 
 #[derive(Clone, Copy, Debug)]
-pub struct BloomRibltHashes<T> {
+pub struct BloomRibltBuckets<T> {
     fpr: f64,
+    lf: f64,
     _marker: PhantomData<T>,
 }
 
-impl<T> BloomRibltHashes<T> {
+impl<T> BloomRibltBuckets<T> {
     #[inline]
     #[must_use]
-    pub fn new(fpr: f64) -> Self {
+    pub fn new(fpr: f64, lf: f64) -> Self {
         assert!(
             fpr > 0.0 && (0.0..1.0).contains(&fpr),
             "fpr should be a ratio in the interval (0.0, 1.0)"
         );
+        assert!(lf > 0.0, "load factor should be greater than 0.0");
 
         Self {
             fpr,
+            lf,
             _marker: PhantomData,
         }
     }
 }
 
-impl<T> Default for BloomRibltHashes<T> {
+impl<T> Default for BloomRibltBuckets<T> {
     fn default() -> Self {
         Self {
             fpr: 0.01,
+            lf: 1.0,
             _marker: PhantomData,
         }
     }
 }
 
-impl<T> Display for BloomRibltHashes<T> {
+impl<T> Display for BloomRibltBuckets<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Bloom+RIBLT+Hashing[fpr={}%]", self.fpr * 100.0,)
+        write!(
+            f,
+            "Bloom+RIBLT+Bucketing[fpr={}%,lf={}]",
+            self.fpr * 100.0,
+            self.lf
+        )
     }
 }
 
-impl<T> BuildFilter<T> for BloomRibltHashes<T> where T: Extract {}
-impl<T> Dispatcher<T> for BloomRibltHashes<T> where T: Clone + Decompose<Decomposition = T> + Extract
-{}
+impl<T> BuildFilter<T> for BloomRibltBuckets<T> where T: Extract {}
+impl<T> Dispatcher<T> for BloomRibltBuckets<T> where
+    T: Clone + Decompose<Decomposition = T> + Extract
+{
+}
 
-impl<T> Algorithm<T> for BloomRibltHashes<T>
+impl<T> Algorithm<T> for BloomRibltBuckets<T>
 where
     T: Clone + Decompose<Decomposition = T> + Default + Extract + Measure,
 {
@@ -70,6 +75,7 @@ where
             mem::size_of::<u64>() + mem::size_of::<u64>() + mem::size_of::<i64>();
 
         let hasher = RandomState::new();
+        let buckets = (self.lf * <T as Measure>::len(local) as f64) as usize;
 
         // 1. Create a bloom filter from the local join-deocompositions and send it to the remote replica.
         let local_decompositions = local.split();
@@ -85,43 +91,32 @@ where
         //    *definitely not* present in the local replica.
         let (remote_common, local_unknown) = self.partition(&local_filter, remote.split());
 
-        // 3. Build a bloom filter from the partion of *probably* common join-decompositions
+        // 3. Build a filter from the partion of *probably* common join-decompositions and send it
+        //    to the local replica. At this stage the remote replica also constructs its buckets.
+        //    For pipelining, the remaining decompositions are sent, and the bucket hashes
+        //    are put into the IBLT to be streamed for synchronization
         let remote_filter = self.filter_from(&remote_common, self.fpr);
-
-        // 4. Calculate the hashes of the *probably* common join-decompositions and put them into the sketch
-        //    to be streamed for synchronization
-        let remote_hashes = {
-            let mut remote_hashes = HashMap::new();
+        let remote_buckets = {
             let mut state = T::default();
             state.join(remote_common);
-            state.split().into_iter().for_each(|d| {
-                let item = d.extract();
-                let item_hash = hasher.hash_one(item);
 
-                remote_hashes.insert(item_hash, d);
-            });
-            remote_hashes
+            self.dispatch(&state, buckets, &hasher)
         };
+        let remote_hashes =
+            BloomRibltBuckets::<T>::hashes_to_bucket_index(&remote_buckets, &hasher);
         let mut remote_iblt = RatelessIBLT::riblt_from(remote_hashes.keys().cloned());
 
-        // 5. Partion the local join-decompositions into *probably* present in both replicas or
-        //    *definitely not* present in the remote replica. (same as 2)
+        // 4. Same as 2
         let (local_common, remote_unknown) = self.partition(&remote_filter, local_decompositions);
 
-        // 6. Calculate the hashes of the *probably* common join-decompositions and put them into the sketch
-        //    to be streamed for synchronization (same as 4)
-        let local_hashes = {
-            let mut local_hashes = HashMap::new();
+        // 5. Partition the *probably* common join-decompositions into buckets and put their hashes into the sketch
+        let local_buckets = {
             let mut state = T::default();
             state.join(local_common);
-            state.split().into_iter().for_each(|d| {
-                let item = d.extract();
-                let item_hash = hasher.hash_one(item);
-
-                local_hashes.insert(item_hash, d);
-            });
-            local_hashes
+            self.dispatch(&state, buckets, &hasher)
         };
+        let local_hashes = BloomRibltBuckets::<T>::hashes_to_bucket_index(&local_buckets, &hasher);
+        
         let mut local_iblt = RatelessIBLT::riblt_from(local_hashes.keys().cloned());
 
         local_iblt.find_all_differences(&mut remote_iblt);
@@ -137,36 +132,59 @@ where
             download: tracker.download(),
         });
 
-        let local_only_hashes_fp = local_iblt.get_local_only_symbols();
-        let remote_only_hashes_fp = local_iblt.get_remote_only_symbols();
-
-        let local_only_decompositions_fp: Vec<_> = local_only_hashes_fp
-            .into_iter()
-            .map(|hash| local_hashes[&hash].clone())
-            .collect();
-
-        // 7. Send remote unknown state detected using the BF
-        //    Send local only state due to false positives
-        //    Send remote only hashes to request for remote only state due to false positives
+        // 6. Compute non matching buckets and their index
+        let local_only_hashes = local_iblt.get_local_only_symbols();
+        let non_matching = local_only_hashes
+            .iter()
+            .map(|hash| {
+                let bucket_idx = local_hashes[hash];
+                let bucket = &local_buckets[bucket_idx];
+                let mut state = T::default();
+                state.join(bucket.values().cloned().collect());
+                (bucket_idx, state)
+            })
+            .collect::<HashMap<_, _>>();
 
         tracker.register(DefaultEvent::LocalToRemote {
             state: remote_unknown
                 .iter()
-                .chain(&local_only_decompositions_fp)
-                .map(T::size_of)
+                .chain(non_matching.values())
+                .map(<T as Measure>::size_of)
                 .sum(),
-            metadata: remote_only_hashes_fp.len() * mem::size_of::<u64>(),
+            metadata: non_matching.keys().count() * mem::size_of::<usize>(),
             upload: tracker.upload(),
         });
 
-        let remote_only_decompositions_fp: Vec<_> = remote_only_hashes_fp
+        let local_buckets = non_matching;
+        let remote_buckets = remote_buckets
             .into_iter()
-            .map(|hash| remote_hashes[&hash].clone())
-            .collect();
+            .enumerate()
+            .filter_map(|(i, bucket)| {
+                local_buckets.contains_key(&i).then(|| {
+                    let mut state = T::default();
+                    state.join(bucket.into_values().collect());
 
-        // 8. Send remote only state due to false positives
+                    (i, state)
+                })
+            })
+            .collect::<HashMap<_, _>>();
+
+        debug_assert_eq!(local_buckets.len(), remote_buckets.len());
+        debug_assert!(remote_buckets.keys().all(|k| local_buckets.contains_key(k)));
+
+        // 7. Compute the differences between buckets against both the local and remote
+        //    decompositions. Then send the difference unknown by remote replica.
+        //    NOTE: These step allows to filter any remaining false positives.
+        let remote_false_positives = remote_buckets
+            .iter()
+            .map(|(i, remote)| local_buckets.get(i).unwrap().difference(remote));
+        let local_false_positives = local_buckets
+            .iter()
+            .map(|(i, local)| remote_buckets.get(i).unwrap().difference(local))
+            .collect::<Vec<_>>();
+
         tracker.register(DefaultEvent::RemoteToLocal {
-            state: remote_only_decompositions_fp
+            state: local_false_positives
                 .iter()
                 .map(<T as Measure>::size_of)
                 .sum(),
@@ -174,14 +192,14 @@ where
             download: tracker.download(),
         });
 
-        // 9. Join the appropriate join-decompositions to each replica.
+        // 8. Join the appropriate join-decompositions to each replica.
         remote.join(remote_unknown);
-        remote.join(local_only_decompositions_fp);
+        remote.join(remote_false_positives.collect());
 
         local.join(local_unknown);
-        local.join(remote_only_decompositions_fp);
+        local.join(local_false_positives);
 
-        // 10. Sanity Check.
+        // 9. Sanity Check.
         tracker.finish(<T as Measure>::false_matches(local, remote));
     }
 }
@@ -221,7 +239,7 @@ mod tests {
 
         let (download, upload) = (Bandwidth::Kbps(0.5), Bandwidth::Kbps(0.5));
         let mut tracker = DefaultTracker::new(download, upload);
-        let bloom_buckets = BloomRibltHashes::new(0.01);
+        let bloom_buckets = BloomRibltBuckets::new(0.0001, 1.0);
 
         bloom_buckets.sync(&mut local, &mut remote, &mut tracker);
         assert_eq!(tracker.false_matches(), 0);

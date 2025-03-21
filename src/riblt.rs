@@ -364,7 +364,7 @@ mod tests {
             iblt2.add_symbol(i);
         }
 
-        let sketch_size = iblt1.find_all_differences(&mut iblt2);
+        let _sketch_size = iblt1.find_all_differences(&mut iblt2);
 
         let local_only_symbols: Vec<i32> = iblt1.get_local_only_symbols();
         assert!(
@@ -401,7 +401,7 @@ mod tests {
         iblt2.add_symbol(200);
         iblt2.add_symbol(201);
 
-        let sketch_size = iblt1.find_all_differences(&mut iblt2);
+        let _sketch_size = iblt1.find_all_differences(&mut iblt2);
 
         let local_only_symbols: Vec<i32> = iblt1.get_local_only_symbols();
         let remote_only_symbols: Vec<i32> = iblt1.get_remote_only_symbols();

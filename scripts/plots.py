@@ -236,7 +236,6 @@ def main():
             runs = {
                 k: v
                 for k, v in exps[1].runs.items()
-                if (not k.is_blbu()) or k.lf == 1.0
             }
             core = Experiment(exps[1].env, runs)
 
@@ -244,31 +243,15 @@ def main():
             name = f"{Path(file.name).stem}_transmitted_{k}.pdf"
             save_or_show(transmitted, name)
 
-            # Plot the blbu experiments
-            runs = {k: v for k, v in exps[1].runs.items() if k.is_blbu()}
-            blbu = Experiment(exps[1].env, runs)
-
-            transmitted = plot_transmitted(blbu, k, colors)
-            name = f"{Path(file.name).stem}_blbu_transmitted_{k}.pdf"
-            save_or_show(transmitted, name)
-
         for exp, k in zip(exps, ["up", "symm", "down"]):
             # Plot the core time experiments
             runs = {
-                k: v for k, v in exp.runs.items() if (not k.is_blbu()) or k.lf == 1.0
+                k: v for k, v in exp.runs.items()
             }
             core = Experiment(exp.env, runs)
 
             time = plot_time_to_sync(core, colors)
             name = f"{Path(file.name).stem}_time_{k}.pdf"
-            save_or_show(time, name)
-
-            # Plot the blbu time experiments
-            runs = {k: v for k, v in exp.runs.items() if k.is_blbu()}
-            blbu = Experiment(exp.env, runs)
-
-            time = plot_time_to_sync(blbu, colors)
-            name = f"{Path(file.name).stem}_blbu_time_{k}.pdf"
             save_or_show(time, name)
 
 

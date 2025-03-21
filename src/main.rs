@@ -8,7 +8,11 @@ use std::{
 
 use crate::{
     crdt::{AWSet, GSet, Measure},
-    sync::{Algorithm, baseline::Baseline, bloombuckets::BloomBuckets, buckets::Buckets},
+    sync::{
+        Algorithm, baseline::Baseline, bloombuckets::BloomBuckets,
+        bloomriblthashes::BloomRibltHashes, buckets::Buckets, bucketsriblt::RibltBuckets,
+        riblthashes::RibltHashes,
+    },
     tracker::{Bandwidth, DefaultEvent, DefaultTracker, Telemetry},
 };
 
@@ -18,9 +22,7 @@ use rand::{
     distributions::{Alphanumeric, Bernoulli, DistString, Distribution, Uniform},
     rngs::StdRng,
 };
-use sync::{
-    bloomriblthashes::BloomRibltHashes, bucketsriblt::RibltBuckets, riblthashes::RibltHashes,
-};
+use sync::bloomribltbuckets::BloomRibltBuckets;
 
 mod bloom;
 mod crdt;
@@ -193,15 +195,7 @@ where
             (remote.clone(), download),
         );
 
-        let algo = RibltHashes::new();
-        run(
-            &algo,
-            similar,
-            (local.clone(), upload),
-            (remote.clone(), download),
-        );
-
-        /*
+        
         for lf in [0.2, 1.0, 5.0] {
             let algo = Buckets::new(lf);
             run(
@@ -221,18 +215,15 @@ where
                 (remote.clone(), download),
             );
         }
-        */
-
-        for fpr in [0.01, 0.1, 0.25] {
-            let algo = BloomRibltHashes::new(fpr);
-            run(
-                &algo,
-                similar,
-                (local.clone(), upload),
-                (remote.clone(), download),
-            );
-        }
-
+        
+        let algo = RibltHashes::new();
+        run(
+            &algo,
+            similar,
+            (local.clone(), upload),
+            (remote.clone(), download),
+        );
+        
         for fpr in [0.01, 0.25] {
             for lf in [1.0, 0.2] {
                 let algo = BloomBuckets::new(fpr, lf);
@@ -243,6 +234,28 @@ where
                     (remote.clone(), download),
                 );
             }
+        }
+
+        for fpr in [0.01, 0.25] {
+            for lf in [1.0, 0.2] {
+                let algo = BloomRibltBuckets::new(fpr, lf);
+                run(
+                    &algo,
+                    similar,
+                    (local.clone(), upload),
+                    (remote.clone(), download),
+                );
+            }
+        }
+
+        for fpr in [0.01, 0.1, 0.25] {
+            let algo = BloomRibltHashes::new(fpr);
+            run(
+                &algo,
+                similar,
+                (local.clone(), upload),
+                (remote.clone(), download),
+            );
         }
     }
 }
