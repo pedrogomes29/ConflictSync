@@ -68,7 +68,7 @@ def read_algorithm(k: str) -> Algorithm:
     return Algorithm(name, formatted)
 
 
-def read_experiments(f: TextIOWrapper) -> list[Experiment]:
+def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[str] = None, min_similarity:int = 0, max_similarity:int = 100) -> list[Experiment]:
     """
     Reads an experiment from the input source.
     This function assumes that the input is not malformed.
@@ -82,6 +82,7 @@ def read_experiments(f: TextIOWrapper) -> list[Experiment]:
         defaultdict(list[Metrics]),
         defaultdict(list[Metrics]),
     ]
+    global similarities
 
     for s in similarities:
         for i, m in enumerate(collector):
@@ -94,12 +95,19 @@ def read_experiments(f: TextIOWrapper) -> list[Experiment]:
             while parts := f.readline().rstrip().split():
                 algo, *metrics = parts
                 algo = read_algorithm(algo)
-                print(algo)
+                
+                if include and algo.name not in include:
+                    continue
+                if exclude and algo.name in exclude:
+                    continue
+                
+                
                 metrics = Metrics(int(metrics[0]), int(metrics[1]), float(metrics[2]))
+                if min_similarity <= s <= max_similarity:
+                    m[algo].append(metrics)
 
-                m[algo].append(metrics)
-        print("\n")
-
+    similarities = range(min_similarity, max_similarity + 1, 5)
+    
     assert len(headers) == 3
     assert all(
         all(len(v) == len(list(similarities)) for v in c.values()) for c in collector
@@ -195,8 +203,15 @@ def main():
     parser.add_argument("--save", action="store_true")
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--quiet", "-q", action="store_true")
+    parser.add_argument("--include", nargs="*", help="Algorithms to include")
+    parser.add_argument("--exclude", nargs="*", help="Algorithms to exclude")
+    parser.add_argument("--min_similarity", type=int, default=0, help="Minimum similarity to plot (default: 0)")
+    parser.add_argument("--max_similarity", type=int, default=100, help="Maximum similarity to plot (default: 100)")
     args = parser.parse_args()
 
+    include_algorithms = set(args.include) if args.include else None
+    exclude_algorithms = set(args.exclude) if args.exclude else None
+    
     # Set global configs for plotting
     plt.style.use("seaborn-v0_8-paper")
     plt.rc("font", family="serif")
@@ -215,7 +230,7 @@ def main():
 
     for file in args.files:
         # File reading
-        exps = read_experiments(file)
+        exps = read_experiments(file, include_algorithms, exclude_algorithms, args.min_similarity, args.max_similarity)
 
         colormap = plt.cm.get_cmap('tab20', 20)
         colors = [colormap(i) for i in range(20)]
