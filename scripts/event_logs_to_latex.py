@@ -54,11 +54,11 @@ def textable(name: str, points: list[int], values: dict[str, list[str]]) -> str:
     label = f"\t\\label{{tab:{name}_ratios}}"
 
     return "\n".join(
-        ["\\begin{table*}[h]", centering]
+        ["\\begin{table}[h]", centering]
         + [f"\t\\begin{{tabular}}{{{cols}}}", rule("top"), header, rule("mid")]
         + rows
         + [rule("bottom"), "\t\\end{tabular}"]
-        + [caption, label, "\\end{table*}"]
+        + [caption, label, "\\end{table}"]
     )
 
 

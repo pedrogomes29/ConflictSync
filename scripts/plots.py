@@ -10,6 +10,7 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib.typing import ColorType
+from matplotlib import colormaps
 
 
 class Header(NamedTuple):
@@ -95,7 +96,7 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
             while parts := f.readline().rstrip().split():
                 algo, *metrics = parts
                 algo = read_algorithm(algo)
-                
+                                
                 if include and algo.name not in include:
                     continue
                 if exclude and algo.name in exclude:
@@ -105,8 +106,9 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
                 metrics = Metrics(int(metrics[0]), int(metrics[1]), float(metrics[2]))
                 if min_similarity <= s <= max_similarity:
                     m[algo].append(metrics)
-
+                    
     similarities = range(min_similarity, max_similarity + 1, 5)
+    
     
     assert len(headers) == 3
     assert all(
@@ -125,37 +127,56 @@ def fmt_label(label: Algorithm) -> str:
     return f"{name} {params}"
 
 
-def plot_transmitted(
-    exp: Experiment, what: str, colors: dict[Algorithm, ColorType]
-) -> Figure:
-    """Plots the transmitted data (total and metadata) over the network for each protocol"""
-    fig, ax = plt.subplots(1, layout="constrained")
+def plot_transmitted(exp: Experiment, colors: dict[Algorithm, ColorType]) -> Figure:
+    """Plots the transmitted data (total, metadata, redundancy) over the network for each protocol."""
+    
+    fig, axes = plt.subplots(1, 3, figsize=(30, 10), gridspec_kw={'wspace': 0.23})  # Adjust spacing
+    ax1, ax2, ax3 = axes  # Unpack subplots
 
-    ax.xaxis.set_major_formatter(percent_formatter)
-    ax.yaxis.set_major_formatter(byte_formatter)
-    ax.grid(linestyle="--", linewidth=0.5, alpha=0.75)
-    ax.set(xlabel="Similarity", xmargin=0, ylabel=f"{what.title()} (Bytes)")
+    # Adjust layout to make space for the legend
+    fig.subplots_adjust(left=0.06, right=0.99, top=0.99, bottom=0.3)  # Increased bottom space
 
-    for algo, metrics in exp.runs.items():
+    markers = ['o', '^', 'v', 's', 'D', '*', 'p', 'H', 'X', '+']
+    marker_dict = {algo: markers[i % len(markers)] for i, algo in enumerate(exp.runs)}
+
+
+    # Format axes
+    labels = ["Total", "Metadata", "Redundancy"]
+    for ax, label in zip(axes, labels):
+        ax.xaxis.set_major_formatter(percent_formatter)
+        ax.yaxis.set_major_formatter(byte_formatter)
+        ax.grid(linestyle="--", linewidth=0.5, alpha=0.75)
+        ax.set_xlabel("Similarity", fontsize=25)
+        ax.set_ylabel(f"{label} (Bytes)", fontsize=25, labelpad=8)
+        ax.tick_params(axis="both", labelsize=20)
+
+
+    legend_handles = []  # Store legend handles
+
+    # Plot data
+    for _, (algo, metrics) in enumerate(exp.runs.items()):
         color = colors[algo]
         label = fmt_label(algo)
+        marker = marker_dict[algo]
 
-        if what == "total":
-            transmitted = [m.state + m.metadata for m in metrics]
-            ax.plot(similarities, transmitted, "o-", c=color, lw=0.8, label=label)
-        elif what == "metadata":
-            transmitted = [m.metadata for m in metrics]
-            ax.plot(similarities, transmitted, "o-", c=color, lw=0.8, label=label)
-        elif what == "redundancy":
-            base_pts = [2 * (1 - (s / 100)) * exp.env.avg_size for s in similarities]
-            transmitted = [max(m.state - nr, 0) for m, nr in zip(metrics, base_pts)]
-            ax.plot(similarities, transmitted, "o-", c=color, lw=0.8, label=label)
-        else:
-            raise ValueError(f"Unknown param {what} for what")
+        line_handle, = ax1.plot(similarities, [m.state + m.metadata for m in metrics], marker=marker, color=color, lw=2, label=label,  markersize=8)
+        ax2.plot(similarities, [m.metadata for m in metrics],  marker=marker, c=color, lw=2, markersize=8)
+        base_pts = [2 * (1 - (s / 100)) * exp.env.avg_size for s in similarities]
+        ax3.plot(similarities, [max(m.state - nr, 0) for m, nr in zip(metrics, base_pts)],  marker=marker, c=color, lw=2, markersize=8)
 
-    ax.legend(title="Algorithms")
+        legend_handles.append(line_handle)  # Store one handle per algorithm
+
+
+    fig.legend(
+        handles=legend_handles,       # Uses the stored line handles for consistency
+        loc="lower center",           # Places the legend below the graphs, centered
+        ncol=(len(exp.runs) + 1) // 2,
+        frameon=False,                # Removes the box around the legend,
+        fontsize=30,                  # Increases legend text size
+        title_fontsize=40             # Increases legend title size
+    )
+
     return fig
-
 
 def print_transmission_ratios(exp: Experiment, what: str):
     """Prints the ratios of metadata and redundancy against the total transmitted."""
@@ -231,9 +252,11 @@ def main():
     for file in args.files:
         # File reading
         exps = read_experiments(file, include_algorithms, exclude_algorithms, args.min_similarity, args.max_similarity)
-
-        colormap = plt.cm.get_cmap('tab20', 20)
-        colors = [colormap(i) for i in range(20)]
+        #get number of algorithms
+                
+        nr_algorithms = len(exps[1].runs)
+        colormap = colormaps.get_cmap("tab10") if nr_algorithms<=10 else colormaps.get_cmap("tab20")
+        colors = [colormap(i) for i in range(nr_algorithms)]
 
         colors = {
             a: colors[i]
@@ -246,17 +269,15 @@ def main():
             for k in ("metadata", "redundancy"):
                 print_transmission_ratios(exps[1], k)
 
-        for k in ("total", "metadata", "redundancy"):
-            # Plot the core experiments
-            runs = {
-                k: v
-                for k, v in exps[1].runs.items()
-            }
-            core = Experiment(exps[1].env, runs)
+        runs = {
+            k: v
+            for k, v in exps[1].runs.items()
+        }
+        core = Experiment(exps[1].env, runs)
 
-            transmitted = plot_transmitted(core, k, colors)
-            name = f"{Path(file.name).stem}_transmitted_{k}.pdf"
-            save_or_show(transmitted, name)
+        transmitted = plot_transmitted(core, colors)
+        name = f"{Path(file.name).stem}_transmitted.pdf"
+        save_or_show(transmitted, name)
 
         for exp, k in zip(exps, ["up", "symm", "down"]):
             # Plot the core time experiments

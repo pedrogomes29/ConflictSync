@@ -47,7 +47,7 @@ impl<T> Default for BloomRibltHashes<T> {
 
 impl<T> Display for BloomRibltHashes<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Bloom+RIBLT+Hashing[fpr={}%]", self.fpr * 100.0,)
+        write!(f, "Bloom+Rateless[fpr={}%]", self.fpr * 100.0,)
     }
 }
 

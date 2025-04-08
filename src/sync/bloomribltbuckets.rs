@@ -47,7 +47,7 @@ impl<T> Display for BloomRibltBuckets<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Bloom+RIBLT+Bucketing[fpr={}%,lf={}]",
+            "Bloom+Bucketing+Rateless[fpr={}%,lf={}]",
             self.fpr * 100.0,
             self.lf
         )

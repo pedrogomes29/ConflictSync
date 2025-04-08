@@ -26,7 +26,7 @@ impl<T> RibltHashes<T> {
 
 impl<T> Display for RibltHashes<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RIBLT+Hashing")
+        write!(f, "Rateless")
     }
 }
 

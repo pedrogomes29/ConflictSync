@@ -38,7 +38,7 @@ impl<T> Default for RibltBuckets<T> {
 
 impl<T> Display for RibltBuckets<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RIBLT+Bucketing[lf={}]", self.lf)
+        write!(f, "Bucketing+Rateless[lf={}]", self.lf)
     }
 }
 
