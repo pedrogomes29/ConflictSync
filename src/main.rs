@@ -30,14 +30,16 @@ mod riblt;
 mod sync;
 mod tracker;
 
-fn gsets_with(len: usize, similar: f64, rng: &mut StdRng) -> (GSet<String>, GSet<String>) {
+fn gsets_with(len: usize, similarity: f64, rng: &mut StdRng) -> (GSet<String>, GSet<String>) {
     assert!(
-        (0.0..=1.0).contains(&similar),
+        (0.0..=1.0).contains(&similarity),
         "similarity ratio should be in (0.0..=1.0)"
     );
 
-    let sims = (len as f64 * similar) as usize;
+    //derived such that sims/(sims+2*diffs) = similar
+    let sims = ((2.0 * similarity * len as f64) / (1.0 + similarity)) as usize;
     let diffs = len - sims;
+
     let dist = Uniform::new_inclusive(5, 80);
 
     let (mut local, mut remote) = (GSet::new(), GSet::new());
@@ -65,16 +67,17 @@ fn gsets_with(len: usize, similar: f64, rng: &mut StdRng) -> (GSet<String>, GSet
 
 fn awsets_with(
     len: usize,
-    similar: f64,
+    similarity: f64,
     del: f64,
     rng: &mut StdRng,
 ) -> (AWSet<String>, AWSet<String>) {
     assert!(
-        (0.0..=1.0).contains(&similar),
+        (0.0..=1.0).contains(&similarity),
         "similarity ratio should be in (0.0..=1.0)"
     );
 
-    let sims = (len as f64 * similar) as usize;
+    //derived such that sims/(sims+2*diffs) = similar
+    let sims = ((2.0 * similarity * len as f64) / (1.0 + similarity)) as usize;
     let diffs = len - sims;
 
     let dist = Uniform::new_inclusive(5, 80);
