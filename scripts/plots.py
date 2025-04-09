@@ -178,6 +178,25 @@ def plot_transmitted(exp: Experiment, colors: dict[Algorithm, ColorType]) -> Fig
 
     return fig
 
+
+
+def print_transmitted(exp: Experiment, what: str) -> Figure:
+    """Prints the actual values of total, metadata, or redundancy transmitted (in bytes)."""
+    for algo, metrics in exp.runs.items():
+        label = fmt_label(algo)
+        if what == "total":
+            values = [m.state + m.metadata for m in metrics]
+        elif what == "metadata":
+            values = [m.metadata for m in metrics]
+        elif what == "redundancy":
+            base_points = [2 * (1 - (s / 100)) * exp.env.avg_size for s in similarities]
+            values = [max(m.state - nr, 0) for m, nr in zip(metrics, base_points)]
+        else:
+            raise ValueError(f"Unknown value parameter {what} for 'what'")
+
+        formatted = [byte_formatter(v) for v in values]
+        print(f"{what} {label}", " ".join(formatted), sep="\n")
+
 def print_transmission_ratios(exp: Experiment, what: str):
     """Prints the ratios of metadata and redundancy against the total transmitted."""
     for algo, metrics in exp.runs.items():
@@ -223,7 +242,8 @@ def main():
     parser.add_argument("files", nargs="*", default=("-"), type=argparse.FileType("r"))
     parser.add_argument("--save", action="store_true")
     parser.add_argument("--show", action="store_true")
-    parser.add_argument("--quiet", "-q", action="store_true")
+    parser.add_argument("--output_data", action="store_true", help="Output the transmitted data that was input")
+    parser.add_argument("--output_ratios", action="store_true", help="Output metadata and redundancy transmission ratios")
     parser.add_argument("--include", nargs="*", help="Algorithms to include")
     parser.add_argument("--exclude", nargs="*", help="Algorithms to exclude")
     parser.add_argument("--min_similarity", type=int, default=0, help="Minimum similarity to plot (default: 0)")
@@ -265,9 +285,15 @@ def main():
 
 
         # Display the ratios
-        if not args.quiet:
+        if args.output_ratios:
             for k in ("metadata", "redundancy"):
                 print_transmission_ratios(exps[1], k)
+
+        if args.output_data:
+            for k in ("total", "metadata", "redundancy"):
+                print_transmitted(exps[1], k)
+
+
 
         runs = {
             k: v
