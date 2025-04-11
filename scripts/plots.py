@@ -14,7 +14,6 @@ from matplotlib import colormaps
 
 
 class Header(NamedTuple):
-    avg_size: int
     upload: int
     download: int
 
@@ -22,12 +21,14 @@ class Header(NamedTuple):
 class Metrics(NamedTuple):
     state: int
     metadata: int
+    redundancy: int
     duration: float
 
 
 class Algorithm(NamedTuple):
     name: str
     params: dict[str, str]
+    hidden: bool
 
     def __hash__(self) -> int:
         return hash((self.name, frozenset(self.params.items())))
@@ -45,7 +46,7 @@ class Experiment(NamedTuple):
     runs: dict[Algorithm, list[Metrics]]
 
 
-similarities = range(0, 101, 5)
+similarities = []
 percent_formatter = ticker.PercentFormatter()
 byte_formatter = ticker.EngFormatter(unit="B")
 bit_formatter = ticker.EngFormatter(unit="b")
@@ -66,7 +67,7 @@ def read_algorithm(k: str) -> Algorithm:
         elif pname == "lf":
             formatted["f_{ld}"] = value
 
-    return Algorithm(name, formatted)
+    return Algorithm(name, formatted, False)
 
 
 def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[str] = None, min_similarity:int = 0, max_similarity:int = 100) -> list[Experiment]:
@@ -74,8 +75,7 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
     Reads an experiment from the input source.
     This function assumes that the input is not malformed.
     """
-    # Ignore the first empty line
-    _ = f.readline()
+
 
     headers = []
     collector = [
@@ -83,12 +83,21 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
         defaultdict(list[Metrics]),
         defaultdict(list[Metrics]),
     ]
+
+    start_percentage, end_percentage, nr_steps = map(int, f.readline().rstrip().split())
+    step_size = (end_percentage - start_percentage) / (nr_steps - 1)
+    
     global similarities
+    similarities = [start_percentage + i * step_size for i in range(nr_steps)]
+    # Ignore the first empty line
+    _ = f.readline()
 
     for s in similarities:
         for i, m in enumerate(collector):
-            header = Header(*map(int, f.readline().rstrip().split()))
-            if s == 0:
+            header_vals = f.readline().rstrip().split()
+            theoretical_minimum = header_vals.pop(0)
+            header = Header(*map(int, header_vals))
+            if s == start_percentage:
                 headers.append(header)
             assert headers[i].upload == header.upload
             assert headers[i].download == header.download
@@ -96,19 +105,21 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
             while parts := f.readline().rstrip().split():
                 algo, *metrics = parts
                 algo = read_algorithm(algo)
-                                
                 if include and algo.name not in include:
-                    continue
+                    algo = algo._replace(hidden=True)
                 if exclude and algo.name in exclude:
-                    continue
+                    algo = algo._replace(hidden=True)
+
                 
-                
-                metrics = Metrics(int(metrics[0]), int(metrics[1]), float(metrics[2]))
+                metrics = Metrics(
+                    int(metrics[0]), # state
+                    int(metrics[1]), # metadata
+                    int(metrics[0]) - int(theoretical_minimum), #redundancy
+                    float(metrics[2])
+                )
                 if min_similarity <= s <= max_similarity:
                     m[algo].append(metrics)
-                    
-    similarities = range(min_similarity, max_similarity + 1, 5)
-    
+                        
     
     assert len(headers) == 3
     assert all(
@@ -127,18 +138,17 @@ def fmt_label(label: Algorithm) -> str:
     return f"{name} {params}"
 
 
-def plot_transmitted(exp: Experiment, colors: dict[Algorithm, ColorType]) -> Figure:
+def plot_transmitted(exp: Experiment, colors: dict[Algorithm, ColorType], marker_dict: dict[Algorithm, str]) -> Figure:
     """Plots the transmitted data (total, metadata, redundancy) over the network for each protocol."""
+    
+    visible_algos = [algo for algo in exp.runs if not algo.hidden]
+
     
     fig, axes = plt.subplots(1, 3, figsize=(30, 10), gridspec_kw={'wspace': 0.23})  # Adjust spacing
     ax1, ax2, ax3 = axes  # Unpack subplots
 
     # Adjust layout to make space for the legend
-    fig.subplots_adjust(left=0.06, right=0.99, top=0.99, bottom=0.3)  # Increased bottom space
-
-    markers = ['o', '^', 'v', 's', 'D', '*', 'p', 'H', 'X', '+']
-    marker_dict = {algo: markers[i % len(markers)] for i, algo in enumerate(exp.runs)}
-
+    fig.subplots_adjust(left=0.06, right=0.99, top=0.99, bottom=0.3)
 
     # Format axes
     labels = ["Total", "Metadata", "Redundancy"]
@@ -153,16 +163,18 @@ def plot_transmitted(exp: Experiment, colors: dict[Algorithm, ColorType]) -> Fig
 
     legend_handles = []  # Store legend handles
 
+
     # Plot data
     for _, (algo, metrics) in enumerate(exp.runs.items()):
+        if(algo.hidden):
+            continue
         color = colors[algo]
         label = fmt_label(algo)
         marker = marker_dict[algo]
 
         line_handle, = ax1.plot(similarities, [m.state + m.metadata for m in metrics], marker=marker, color=color, lw=2, label=label,  markersize=8)
         ax2.plot(similarities, [m.metadata for m in metrics],  marker=marker, c=color, lw=2, markersize=8)
-        base_pts = [2 * (1 - (s / 100)) * exp.env.avg_size for s in similarities]
-        ax3.plot(similarities, [max(m.state - nr, 0) for m, nr in zip(metrics, base_pts)],  marker=marker, c=color, lw=2, markersize=8)
+        ax3.plot(similarities, [m.redundancy for m in metrics],  marker=marker, c=color, lw=2, markersize=8)
 
         legend_handles.append(line_handle)  # Store one handle per algorithm
 
@@ -170,7 +182,7 @@ def plot_transmitted(exp: Experiment, colors: dict[Algorithm, ColorType]) -> Fig
     fig.legend(
         handles=legend_handles,       # Uses the stored line handles for consistency
         loc="lower center",           # Places the legend below the graphs, centered
-        ncol=(len(exp.runs) + 1) // 2,
+        ncol=(len(visible_algos) + 1) // 2,
         frameon=False,                # Removes the box around the legend,
         fontsize=30,                  # Increases legend text size
         title_fontsize=40             # Increases legend title size
@@ -183,14 +195,15 @@ def plot_transmitted(exp: Experiment, colors: dict[Algorithm, ColorType]) -> Fig
 def print_transmitted(exp: Experiment, what: str) -> Figure:
     """Prints the actual values of total, metadata, or redundancy transmitted (in bytes)."""
     for algo, metrics in exp.runs.items():
+        if(algo.hidden):
+            continue
         label = fmt_label(algo)
         if what == "total":
             values = [m.state + m.metadata for m in metrics]
         elif what == "metadata":
             values = [m.metadata for m in metrics]
         elif what == "redundancy":
-            base_points = [2 * (1 - (s / 100)) * exp.env.avg_size for s in similarities]
-            values = [max(m.state - nr, 0) for m, nr in zip(metrics, base_points)]
+            values = [m.redundancy for m in metrics]
         else:
             raise ValueError(f"Unknown value parameter {what} for 'what'")
 
@@ -200,14 +213,15 @@ def print_transmitted(exp: Experiment, what: str) -> Figure:
 def print_transmission_ratios(exp: Experiment, what: str):
     """Prints the ratios of metadata and redundancy against the total transmitted."""
     for algo, metrics in exp.runs.items():
+        if(algo.hidden):
+            continue
         label = fmt_label(algo)
         total = [m.state + m.metadata for m in metrics]
 
         if what == "metadata":
             collected = [m.metadata for m in metrics]
         elif what == "redundancy":
-            base_points = [2 * (1 - (s / 100)) * exp.env.avg_size for s in similarities]
-            collected = [max(m.state - nr, 0) for m, nr in zip(metrics, base_points)]
+            collected = [m.redundancy for m in metrics]
         else:
             raise ValueError(f"Unknown value parameter {what} for what")
 
@@ -227,6 +241,8 @@ def plot_time_to_sync(exp: Experiment, colors: dict[Algorithm, ColorType]) -> Fi
     ax.set(xlabel="Similarity", xmargin=0, ylabel=ylabel)
 
     for algo, metrics in exp.runs.items():
+        if(algo.hidden):
+            continue
         color = colors[algo]
         label = fmt_label(algo)
         time = [m.duration for m in metrics]
@@ -274,14 +290,21 @@ def main():
         exps = read_experiments(file, include_algorithms, exclude_algorithms, args.min_similarity, args.max_similarity)
         #get number of algorithms
                 
-        nr_algorithms = len(exps[1].runs)
-        colormap = colormaps.get_cmap("tab10") if nr_algorithms<=10 else colormaps.get_cmap("tab20")
-        colors = [colormap(i) for i in range(nr_algorithms)]
-
+        colormap = colormaps.get_cmap("tab10")
+        
         colors = {
-            a: colors[i]
+            a: colormap(i%10)
             for i, a in enumerate(exps[1].runs.keys())
         }
+        markers = ['o', '^']
+        
+        marker_dict = {}
+        for i, algo in enumerate(exps[1].runs.keys()):
+            if i < 10:
+                marker_dict[algo] = markers[0]
+            else:
+                marker_dict[algo] = markers[1]
+
 
 
         # Display the ratios
@@ -294,14 +317,13 @@ def main():
                 print_transmitted(exps[1], k)
 
 
-
         runs = {
             k: v
             for k, v in exps[1].runs.items()
         }
         core = Experiment(exps[1].env, runs)
 
-        transmitted = plot_transmitted(core, colors)
+        transmitted = plot_transmitted(core, colors, marker_dict)
         name = f"{Path(file.name).stem}_transmitted.pdf"
         save_or_show(transmitted, name)
 

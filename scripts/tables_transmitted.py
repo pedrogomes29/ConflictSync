@@ -26,12 +26,18 @@ def read(f: TextIOWrapper, *, name: str) -> dict[str, list[str]]:
         values[algo] = grouped
 
 
-def latex_si_format(val: str) -> str:
+def parse_num(val: str) -> float:
+    num, unit = val.split()
+    num = float(num)
+    scale = {"B": 1, "kB": 1e3, "MB": 1e6}[unit]
+    return num * scale
+
+
+def latex_si_format(val: str, bold: bool = False) -> str:
     """Formats a value like '2.3 MB' as a LaTeX siunitx command with rounding"""
     num, unit = val.split()
     num = float(num)
 
-    # Round to 3 significant digits
     if num == 0:
         rounded = "0"
     elif num < 0.01:
@@ -47,25 +53,43 @@ def latex_si_format(val: str) -> str:
         "MB": r"\mega\byte",
     }[unit]
 
-    return f"\\SI{{{rounded}}}{{{prefix}}}"
+    content = f"\\SI{{{rounded}}}{{{prefix}}}"
+    return f"\\textbf{{{content}}}" if bold else content
 
-def textable(name: str, points: list[int], values: dict[str, list[str]]) -> str:
+
+def textable(name: str, points: list[int], values: dict[str, list[str]], bold_min: bool = False) -> str:
     assert all(0 <= x <= 100 for x in points)
     indexes = [p // 5 for p in points]
     cols = "l" + "c" * len(points)
 
-    # Table header
     header = (
         "\t\t\\textbf{Algorithm} & "
         + " & ".join(f"\\textbf{{{p}\\%}}" for p in points)
         + " \\\\"
     )
 
-    # Extract only needed percentages per algorithm
-    rows = []
+    # Prepare matrix of values for comparisons
+    matrix = []
     for algo, vals in values.items():
-        selected = [latex_si_format(vals[i]) for i in indexes]
-        rows.append(f"\t\t{algo} & {' & '.join(selected)} \\\\")
+        selected = [vals[i] for i in indexes]
+        matrix.append((algo, selected))
+
+    # Find min values per column
+    min_per_col = []
+    for i in range(len(indexes)):
+        col_vals = [parse_num(row[1][i]) for row in matrix]
+        min_val = min(col_vals)
+        min_per_col.append(min_val)
+
+    # Build rows
+    rows = []
+    for algo, vals in matrix:
+        formatted = []
+        for i, val in enumerate(vals):
+            num = parse_num(val)
+            is_min_of_col = num == min_per_col[i]
+            formatted.append(latex_si_format(val, is_min_of_col and bold_min))
+        rows.append(f"\t\t{algo} & {' & '.join(formatted)} \\\\")
 
     def rule(kind: str) -> str:
         return f"\t\t\\{kind}rule"
@@ -92,13 +116,11 @@ def main():
     percentages = [0, 25, 50, 75, 90, 95, 100]
     dtype = pathlib.Path(args.file.name).stem
 
-    # Read the ratios
     total = read(args.file, name="total")
     metadata = read(args.file, name="metadata")
     redundancy = read(args.file, name="redundancy")
 
-    # Emit the tables in tex
-    total_table = textable(f"{dtype}_total", percentages, total)
+    total_table = textable(f"{dtype}_total", percentages, total, True)
     metadata_table = textable(f"{dtype}_metadata", percentages, metadata)
     redundancy_table = textable(f"{dtype}_redundancy", percentages, redundancy)
 
