@@ -173,9 +173,10 @@ fn run_with<T>(similar: f64, local: T, remote: T)
 where
     T: Clone + Decompose<Decomposition = T> + Default + Extract + Measure,
 {
-    let size_of_local = <T as Measure>::size_of(&local);
-    let size_of_remote = <T as Measure>::size_of(&remote);
-    let avg_size_of = (size_of_local + size_of_remote) / 2;
+    let local_only_size = <T as Measure>::size_of(&local.difference(&remote));
+    let remote_only_size = <T as Measure>::size_of(&remote.difference(&local));
+
+    let theoretical_minimum = local_only_size + remote_only_size;
 
     let links = [
         (Bandwidth::Mbps(10.0), Bandwidth::Mbps(1.0)),
@@ -185,7 +186,7 @@ where
 
     for (upload, download) in links {
         println!(
-            "\n{avg_size_of} {} {}",
+            "\n{theoretical_minimum} {} {}",
             upload.bits_per_sec(),
             download.bits_per_sec()
         );
@@ -286,9 +287,20 @@ fn main() {
         panic!("expected an argument telling which data type to use")
     }
 
-    let similarities = (0..=100)
-        .step_by(5)
-        .map(|similar| f64::from(similar) / 100.0);
+    let nr_steps = 20;
+    let start_similarity = 90;
+    let end_similarity = 100;
+    let step = ((end_similarity-start_similarity)as f64)/(nr_steps as f64);
+
+    
+
+    let similarities = (0..=nr_steps)
+    .map(|i| 90.0 + i as f64 * step)
+    .map(|val| val / 100.0);
+
+    println!(
+        "{start_similarity} {end_similarity} {nr_steps}",
+    );
 
     match args[1].to_lowercase().as_str() {
         "gset" => similarities.for_each(|s| {
