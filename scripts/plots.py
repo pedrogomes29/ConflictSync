@@ -85,10 +85,10 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
     ]
 
     start_percentage, end_percentage, nr_steps = map(int, f.readline().rstrip().split())
-    step_size = (end_percentage - start_percentage) / (nr_steps - 1)
+    step_size = (end_percentage - start_percentage) / nr_steps
     
     global similarities
-    similarities = [start_percentage + i * step_size for i in range(nr_steps)]
+    similarities = [start_percentage + i * step_size for i in range(nr_steps+1)]
     # Ignore the first empty line
     _ = f.readline()
 
@@ -109,7 +109,20 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
                     algo = algo._replace(hidden=True)
                 if exclude and algo.name in exclude:
                     algo = algo._replace(hidden=True)
-
+                
+                is_best = False
+                if algo.name=="Bloom+Bucketing" and algo.params.get('\\epsilon')=='1\\%' and algo.params.get('f_{ld}') =='0.2':
+                    is_best = True
+                if algo.name=="Bloom+Rateless" and algo.params.get('\\epsilon')=='1\\%':
+                    is_best = True
+                if algo.name=='Rateless':
+                    is_best = True
+                if algo.name=='Baseline':
+                    is_best = True
+                
+                if not is_best:
+                    algo = algo._replace(hidden=True)                
+                
                 
                 metrics = Metrics(
                     int(metrics[0]), # state

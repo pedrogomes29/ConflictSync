@@ -288,14 +288,14 @@ fn main() {
     }
 
     let nr_steps = 20;
-    let start_similarity = 90;
+    let start_similarity = 0;
     let end_similarity = 100;
     let step = ((end_similarity-start_similarity)as f64)/(nr_steps as f64);
 
     
 
     let similarities = (0..=nr_steps)
-    .map(|i| 90.0 + i as f64 * step)
+    .map(|i| start_similarity as f64 + i as f64 * step)
     .map(|val| val / 100.0);
 
     println!(
