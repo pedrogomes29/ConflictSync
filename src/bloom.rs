@@ -38,6 +38,17 @@ where
         }
     }
 
+    pub fn from_raw_parts(m: usize, k: u64) -> Self {
+        assert!(m > 0 && k > 0, "m and k should be positive");
+
+        Self {
+            base: bitvec![0; max(m, 1)],
+            hashers: [RandomState::new(), RandomState::new()],
+            hashes: k,
+            _marker: PhantomData,
+        }
+    }
+
     #[inline]
     pub fn bitslice(&self) -> &BitSlice {
         &self.base

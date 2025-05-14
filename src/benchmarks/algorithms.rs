@@ -9,9 +9,7 @@ use crate::{
     benchmarks::{awsets_with, gsets_with},
     crdt::{Decompose, Extract, Measure},
     sync::{
-        Algorithm, baseline::Baseline, bloombuckets::BloomBuckets,
-        bloomribltbuckets::BloomRibltBuckets, bloomriblthashes::BloomRibltHashes, buckets::Buckets,
-        bucketsriblt::RibltBuckets, riblthashes::RibltHashes,
+        baseline::Baseline, bloombuckets::BloomBuckets, bloomribltbuckets::BloomRibltBuckets, bloomriblthashes::BloomRibltHashes, buckets::Buckets, bucketsriblt::RibltBuckets, rbloomriblthashes::RBloomRibltHashes, riblthashes::RibltHashes, Algorithm
     },
     tracker::{Bandwidth, DefaultEvent, DefaultTracker, Telemetry},
 };
@@ -77,6 +75,7 @@ where
             download.bits_per_sec()
         );
 
+        /*
         let algo = Baseline::new();
         run(
             &algo,
@@ -136,6 +135,7 @@ where
                 );
             }
         }
+        */
 
         for fpr in [0.01, 0.1, 0.25] {
             let algo = BloomRibltHashes::new(fpr);
@@ -145,6 +145,20 @@ where
                 (local.clone(), upload),
                 (remote.clone(), download),
             );
+        }
+
+
+
+        for m_ratio in [0.1, 0.2, 0.5, 1.0] {
+            for angle_threshold_deg in [0.1, 0.2, 0.5, 1.0]{
+                let algo = RBloomRibltHashes::new(m_ratio, angle_threshold_deg);
+                run(
+                    &algo,
+                    similar,
+                    (local.clone(), upload),
+                    (remote.clone(), download),
+                );
+            }
         }
     }
 }

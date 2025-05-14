@@ -66,6 +66,10 @@ def read_algorithm(k: str) -> Algorithm:
             formatted["\\epsilon"] = value.replace("%", "\\%")
         elif pname == "lf":
             formatted["f_{ld}"] = value
+        elif pname == "m_ratio":
+            formatted["m\\_ratio"] = value
+        elif pname == "angle":
+            formatted["angle"] = value
 
     return Algorithm(name, formatted, False)
 
@@ -110,6 +114,7 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
                 if exclude and algo.name in exclude:
                     algo = algo._replace(hidden=True)
                 
+                """
                 is_best = False
                 if algo.name=="Bloom+Bucketing" and algo.params.get('\\epsilon')=='1\\%' and algo.params.get('f_{ld}') =='0.2':
                     is_best = True
@@ -121,7 +126,8 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
                     is_best = True
                 
                 if not is_best:
-                    algo = algo._replace(hidden=True)                
+                    algo = algo._replace(hidden=True)    
+                """            
                 
                 
                 metrics = Metrics(
@@ -130,6 +136,7 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
                     int(metrics[0]) - int(theoretical_minimum), #redundancy
                     float(metrics[2])
                 )
+                
                 if min_similarity <= s <= max_similarity:
                     m[algo].append(metrics)
                         
@@ -195,7 +202,7 @@ def plot_transmitted(exp: Experiment, colors: dict[Algorithm, ColorType], marker
     fig.legend(
         handles=legend_handles,       # Uses the stored line handles for consistency
         loc="lower center",           # Places the legend below the graphs, centered
-        ncol=(len(visible_algos) + 1) // 2,
+        ncol=(len(visible_algos) + 2) // 3,
         frameon=False,                # Removes the box around the legend,
         fontsize=30,                  # Increases legend text size
         title_fontsize=40             # Increases legend title size

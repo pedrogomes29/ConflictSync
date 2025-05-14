@@ -116,7 +116,7 @@ where
             self.dispatch(&state, buckets, &hasher)
         };
         let local_hashes = BloomRibltBuckets::<T>::hashes_to_bucket_index(&local_buckets, &hasher);
-        
+
         let mut local_iblt = RatelessIBLT::riblt_from(local_hashes.keys().cloned());
 
         local_iblt.find_all_differences(&mut remote_iblt);

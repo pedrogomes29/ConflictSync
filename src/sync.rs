@@ -5,10 +5,7 @@ use std::{
 };
 
 use crate::{
-    bloom::BloomFilter,
-    crdt::{Decompose, Extract},
-    riblt::{RatelessIBLT, Symbol},
-    tracker::Telemetry,
+    bloom::BloomFilter, crdt::{Decompose, Extract}, rateless_bloom::RatelessBF, riblt::{RatelessIBLT, Symbol}, tracker::Telemetry
 };
 
 pub mod baseline;
@@ -19,12 +16,16 @@ pub mod bloomriblthashes;
 pub mod buckets;
 pub mod bucketsriblt;
 pub mod riblthashes;
+pub mod rbloomriblthashes;
 
 pub trait Algorithm<T> {
     type Tracker: Telemetry;
 
     fn sync(&self, local: &mut T, remote: &mut T, tracker: &mut Self::Tracker);
 }
+
+const WINDOW_SIZE:usize = 1;
+const MAX_NR_RUNS:usize = 1;
 
 pub trait Dispatcher<T>
 where
@@ -118,5 +119,26 @@ where
             riblt.add_symbol(symbol.clone());
         });
         riblt
+    }
+}
+
+pub trait BuildRatelessFilter<T>
+where
+    T: Extract,
+{
+    fn filter_from(&self, decompositions: &[T], m_ratio: f64) -> RatelessBF<<T as Extract>::Item> {
+        let decompositions: Vec<_> = decompositions.into_iter().map(|d| d.extract()).collect();
+        let filter = RatelessBF::new(decompositions, m_ratio);
+        filter
+    }
+
+    fn partition(
+        &self,
+        rateless_bf: &RatelessBF<<T as Extract>::Item>,
+        decompositions: Vec<T>,
+    ) -> (Vec<T>, Vec<T>) {
+        decompositions
+            .into_iter()
+            .partition(|d| rateless_bf.contains(&d.extract()))
     }
 }

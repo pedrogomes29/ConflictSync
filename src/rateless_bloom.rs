@@ -1,6 +1,6 @@
-use std::{collections::VecDeque, error::Error, hash::Hash, fmt::{self, Display, Formatter}, f64::consts::PI};
-
+use std::{collections::VecDeque, error::Error, f64::consts::PI, fmt::{self, Display, Formatter}, hash::Hash, mem};
 use super::bloom::BloomFilter;
+
 #[derive(Debug)]
 struct ConvergenceError(String);
 
@@ -51,12 +51,12 @@ where
         angle_threshold_deg: f64,
         window_size: usize,
         max_runs: usize,
-    ) -> Result<(Vec<T>, Vec<T>), Box<dyn Error>> {
+    ) -> Result<(), Box<dyn Error>> {
         let mut recent_angles = VecDeque::with_capacity(window_size);
         let mut angle_sum = 0.0;
         let mut last_normalized: Option<f64> = None;
     
-        for _ in 0..max_runs {
+        for _ in 1..=max_runs {
             self.extend();
     
             let (positives, negatives): (Vec<T>, Vec<T>) =
@@ -79,7 +79,7 @@ where
                 if recent_angles.len() == window_size {
                     let avg_angle = angle_sum / window_size as f64;
                     if avg_angle < angle_threshold_deg {
-                        return Ok((positives, negatives));
+                        return Ok(());
                     }
                 }
             }
@@ -93,5 +93,17 @@ where
         ))))
     }
     
-    
+    pub fn size_of(&self) -> usize {
+        if self.bloom_filters.is_empty(){
+            return 0;
+        }
+
+        let standalone_bf = &self.bloom_filters[0];
+        let standalone_bf_size = standalone_bf.bitslice().chunks(8).count();
+        
+        self.bloom_filters.len() * standalone_bf_size //combined bitarray size in Bytes
+        + mem::size_of::<u64>() //size to transmit m the number of bits (in each of the internal BFs)
+    }
+
+
 }
