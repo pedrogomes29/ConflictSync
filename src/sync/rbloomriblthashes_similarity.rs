@@ -14,55 +14,59 @@ use crate::{
 
 use super::{Algorithm, BuildRatelessFilter, Dispatcher};
 
-
-const WINDOW_SIZE:usize = 1;
-const MAX_NR_RUNS:usize = 1000;
+const MAX_NR_RUNS: usize = 1000;
 
 #[derive(Clone, Copy, Debug)]
-pub struct RBloomRibltHashes<T> {
+pub struct RBloomRibltHashesSimilarity<T> {
     m_ratio: f64,
-    angle_threshold_deg: f64,
+    similarity_threshold: f64,
     _marker: PhantomData<T>,
 }
 
-impl<T> RBloomRibltHashes<T> {
+impl<T> RBloomRibltHashesSimilarity<T> {
     #[inline]
     #[must_use]
-    pub fn new(m_ratio:f64, angle_threshold_deg: f64) -> Self {
+    pub fn new(m_ratio: f64, similarity_threshold: f64) -> Self {
         assert!(
-            (0.0..=90.0).contains(&angle_threshold_deg),
-            "angle_threshold_deg should be an angle in the interval (0.0, 90.0)"
+            (0.0..=90.0).contains(&similarity_threshold),
+            "similarity_threshold should be an angle in the interval (0.0, 90.0)"
         );
 
         Self {
             m_ratio,
-            angle_threshold_deg,
-            _marker: PhantomData
-        }
-    }
-}
-
-impl<T> Default for RBloomRibltHashes<T> {
-    fn default() -> Self {
-        Self {
-            m_ratio: 0.2,
-            angle_threshold_deg: 1.0,
+            similarity_threshold,
             _marker: PhantomData,
         }
     }
 }
 
-impl<T> Display for RBloomRibltHashes<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RBloom+Rateless[m_ratio={},angle={}]", self.m_ratio, self.angle_threshold_deg)
+impl<T> Default for RBloomRibltHashesSimilarity<T> {
+    fn default() -> Self {
+        Self {
+            m_ratio: 1.0,
+            similarity_threshold: 0.95,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<T> BuildRatelessFilter<T> for RBloomRibltHashes<T> where T: Extract {}
-impl<T> Dispatcher<T> for RBloomRibltHashes<T> where T: Clone + Decompose<Decomposition = T> + Extract
-{}
+impl<T> Display for RBloomRibltHashesSimilarity<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "RBloom+Rateless+Similarity[m_ratio={},sim={}]",
+            self.m_ratio, self.similarity_threshold
+        )
+    }
+}
 
-impl<T> Algorithm<T> for RBloomRibltHashes<T>
+impl<T> BuildRatelessFilter<T> for RBloomRibltHashesSimilarity<T> where T: Extract {}
+impl<T> Dispatcher<T> for RBloomRibltHashesSimilarity<T> where
+    T: Clone + Decompose<Decomposition = T> + Extract
+{
+}
+
+impl<T> Algorithm<T> for RBloomRibltHashesSimilarity<T>
 where
     T: Clone + Decompose<Decomposition = T> + Default + Extract + Measure,
 {
@@ -80,17 +84,21 @@ where
 
         // 1. Create a bloom filter from the local join-deocompositions and send it to the remote replica.
         let local_decompositions = local.split();
-        let local_decompositions_extracted: Vec<_> = local_decompositions.iter().map(|d| d.extract()).collect();
-
+        let local_decompositions_extracted: Vec<_> =
+            local_decompositions.iter().map(|d| d.extract()).collect();
 
         let mut local_filter = self.filter_from(&local_decompositions, self.m_ratio);
 
         let remote_decompositions = remote.split();
-        let remote_decompositions_extracted: Vec<_> = remote_decompositions.iter().map(|d| d.extract()).collect();
-        if let Err(_) = local_filter.extend_until_stable(remote_decompositions_extracted, self.angle_threshold_deg, WINDOW_SIZE, MAX_NR_RUNS){
+        let remote_decompositions_extracted: Vec<_> =
+            remote_decompositions.iter().map(|d| d.extract()).collect();
+        if let Err(_) = local_filter.extend_until_target_similarity(
+            remote_decompositions_extracted,
+            self.similarity_threshold,
+            MAX_NR_RUNS,
+        ) {
             panic!("Local rateless bloom filter did not converge");
         };
-
 
         tracker.register(DefaultEvent::LocalToRemote {
             state: 0,
@@ -103,8 +111,12 @@ where
         let (remote_common, local_unknown) = self.partition(&local_filter, remote.split());
 
         // 3. Build a bloom filter from the partion of *probably* common join-decompositions
-        let mut remote_filter =  self.filter_from(&remote_common, self.m_ratio);
-        if let Err(_) = remote_filter.extend_until_stable(local_decompositions_extracted, self.angle_threshold_deg, WINDOW_SIZE, MAX_NR_RUNS){
+        let mut remote_filter = self.filter_from(&remote_common, self.m_ratio);
+        if let Err(_) = remote_filter.extend_until_target_similarity(
+            local_decompositions_extracted,
+            self.similarity_threshold,
+            MAX_NR_RUNS,
+        ) {
             panic!("Remote rateless bloom filter did not converge");
         };
 
@@ -115,11 +127,8 @@ where
             metadata: remote_filter.size_of(),
             download: tracker.download(),
         });
-        
+
         let (local_common, remote_unknown) = self.partition(&remote_filter, local_decompositions);
-
-
-
 
         // 5. Calculate the hashes of the *probably* common join-decompositions and put them into the sketch
         //    to be streamed for synchronization
@@ -176,7 +185,10 @@ where
         //    Send local only state due to false positives
         //    Send remote only hashes to request for remote only state due to false positives
         tracker.register(DefaultEvent::RemoteToLocal {
-            state: remote_only_decompositions_fp.iter().map(<T as Measure>::size_of).sum(),
+            state: remote_only_decompositions_fp
+                .iter()
+                .map(<T as Measure>::size_of)
+                .sum(),
             metadata: local_only_hashes_fp.len() * mem::size_of::<u64>(),
             download: tracker.download(),
         });
@@ -243,7 +255,7 @@ mod tests {
 
         let (download, upload) = (Bandwidth::Kbps(0.5), Bandwidth::Kbps(0.5));
         let mut tracker = DefaultTracker::new(download, upload);
-        let bloom_buckets = RBloomRibltHashes::new(0.5, 1.0);
+        let bloom_buckets = RBloomRibltHashesSimilarity::new(0.5, 1.0);
 
         bloom_buckets.sync(&mut local, &mut remote, &mut tracker);
         assert_eq!(tracker.false_matches(), 0);

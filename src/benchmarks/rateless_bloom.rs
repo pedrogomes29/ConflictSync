@@ -21,7 +21,9 @@ where
 
     let remote_decompositions: Vec<_> = remote.split().into_iter().map(|d| d.extract()).collect();
 
-    let mut rateless_bf = RatelessBF::new(local_decompositions, 0.5);
+    let m_ratio = 0.5;
+    let m = (local_decompositions.len() as f64 * m_ratio).ceil() as usize;
+    let mut rateless_bf = RatelessBF::new(local_decompositions, m);
     for run in 0..NR_RUNS {
         rateless_bf.extend();
         let nr_positives = remote_decompositions

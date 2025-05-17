@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::{
+    f64::consts::LN_2,
     fmt::Display,
     time::{Duration, Instant},
 };
@@ -9,7 +10,10 @@ use crate::{
     benchmarks::{awsets_with, gsets_with},
     crdt::{Decompose, Extract, Measure},
     sync::{
-        baseline::Baseline, bloombuckets::BloomBuckets, bloomribltbuckets::BloomRibltBuckets, bloomriblthashes::BloomRibltHashes, buckets::Buckets, bucketsriblt::RibltBuckets, rbloomriblthashes::RBloomRibltHashes, riblthashes::RibltHashes, Algorithm
+        Algorithm, baseline::Baseline, bloombuckets::BloomBuckets,
+        bloomribltbuckets::BloomRibltBuckets, bloomriblthashes::BloomRibltHashes, buckets::Buckets,
+        bucketsriblt::RibltBuckets, rbloomriblthashes_heuristic::RBloomRibltHashesHeuristic,
+        rbloomriblthashes_similarity::RBloomRibltHashesSimilarity, riblthashes::RibltHashes,
     },
     tracker::{Bandwidth, DefaultEvent, DefaultTracker, Telemetry},
 };
@@ -63,9 +67,9 @@ where
     let theoretical_minimum = local_only_size + remote_only_size;
 
     let links = [
-        (Bandwidth::Mbps(10.0), Bandwidth::Mbps(1.0)),
+        //(Bandwidth::Mbps(10.0), Bandwidth::Mbps(1.0)),
         (Bandwidth::Mbps(10.0), Bandwidth::Mbps(10.0)),
-        (Bandwidth::Mbps(1.0), Bandwidth::Mbps(10.0)),
+        //(Bandwidth::Mbps(1.0), Bandwidth::Mbps(10.0)),
     ];
 
     for (upload, download) in links {
@@ -137,7 +141,10 @@ where
         }
         */
 
-        for fpr in [0.01, 0.1, 0.25] {
+        /*
+        let fprs: Vec<f64> = (1..=500).map(|i| i as f64 / 1000.0).collect();
+
+        for fpr in fprs {
             let algo = BloomRibltHashes::new(fpr);
             run(
                 &algo,
@@ -146,12 +153,23 @@ where
                 (remote.clone(), download),
             );
         }
+        */
 
+        for m_ratio in [1.0] {
+            for angle_threshold_deg in [0.2] {
+                let algo = RBloomRibltHashesHeuristic::new(m_ratio, angle_threshold_deg);
+                run(
+                    &algo,
+                    similar,
+                    (local.clone(), upload),
+                    (remote.clone(), download),
+                );
+            }
+        }
 
-
-        for m_ratio in [0.1, 0.2, 0.5, 1.0] {
-            for angle_threshold_deg in [0.1, 0.2, 0.5, 1.0]{
-                let algo = RBloomRibltHashes::new(m_ratio, angle_threshold_deg);
+        for m_ratio in [1.0] {
+            for similarity in [0.95] {
+                let algo = RBloomRibltHashesSimilarity::new(m_ratio, similarity);
                 run(
                     &algo,
                     similar,

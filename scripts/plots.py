@@ -11,6 +11,9 @@ import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib.typing import ColorType
 from matplotlib import colormaps
+import numpy as np
+from matplotlib import lines
+
 
 
 class Header(NamedTuple):
@@ -50,7 +53,7 @@ similarities = []
 percent_formatter = ticker.PercentFormatter()
 byte_formatter = ticker.EngFormatter(unit="B")
 bit_formatter = ticker.EngFormatter(unit="b")
-
+NR_EXPERIMENTS = 1
 
 def read_algorithm(k: str) -> Algorithm:
     """
@@ -74,7 +77,7 @@ def read_algorithm(k: str) -> Algorithm:
     return Algorithm(name, formatted, False)
 
 
-def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[str] = None, min_similarity:int = 0, max_similarity:int = 100) -> list[Experiment]:
+def read_experiments(f: TextIOWrapper, nr_experiments:int, include: set[str] = None, exclude: set[str] = None, min_similarity:int = 0, max_similarity:int = 100) -> list[Experiment]:
     """
     Reads an experiment from the input source.
     This function assumes that the input is not malformed.
@@ -82,12 +85,7 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
 
 
     headers = []
-    collector = [
-        defaultdict(list[Metrics]),
-        defaultdict(list[Metrics]),
-        defaultdict(list[Metrics]),
-    ]
-
+    collector = [defaultdict(list[Metrics])] * nr_experiments
     start_percentage, end_percentage, nr_steps = map(int, f.readline().rstrip().split())
     step_size = (end_percentage - start_percentage) / nr_steps
     
@@ -141,7 +139,7 @@ def read_experiments(f: TextIOWrapper, include: set[str] = None, exclude: set[st
                     m[algo].append(metrics)
                         
     
-    assert len(headers) == 3
+    assert len(headers) == nr_experiments
     assert all(
         all(len(v) == len(list(similarities)) for v in c.values()) for c in collector
     )
@@ -156,6 +154,62 @@ def fmt_label(label: Algorithm) -> str:
     name = "".join(p[:2] for p in label.name.split("+"))
     params = f'[{", ".join(f"${k} = {v}$" for k, v in label.params.items())}]'
     return f"{name} {params}"
+
+def plot_transmitted_with_surface(exp: Experiment, colors: dict[Algorithm, ColorType], marker_dict: dict[Algorithm, str]) -> Figure:
+    """Plot only Metadata transmitted with Bloom+Rateless as a background surface (y-lim fixed 0 to 300kB)."""
+
+    visible_algos = [algo for algo in exp.runs if not algo.hidden]
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+    fig.subplots_adjust(left=0.15, right=0.95, top=0.9, bottom=0.15)
+
+    ax.xaxis.set_major_formatter(percent_formatter)
+    ax.yaxis.set_major_formatter(byte_formatter)
+    ax.grid(linestyle="--", linewidth=0.5, alpha=0.75)
+    ax.set_xlabel("Similarity", fontsize=25)
+    ax.set_ylabel("Metadata (Bytes)", fontsize=25, labelpad=8)
+    ax.tick_params(axis="both", labelsize=20)
+
+    legend_handles = []
+
+    # Extract Bloom+Rateless runs
+    blra_runs = {
+        algo: metrics for algo, metrics in exp.runs.items()
+        if not algo.hidden and algo.name == "Bloom+Rateless"
+    }
+
+    if blra_runs:
+        metadata_matrix = np.array([[m.metadata for m in metrics] for metrics in blra_runs.values()])
+        ymin = np.min(metadata_matrix, axis=0)
+        ymax = np.max(metadata_matrix, axis=0)
+        ax.fill_between(similarities, ymin, ymax, color="lightblue", alpha=0.3, label="BlRa")
+
+    # Plot other algorithms normally
+    for algo, metrics in exp.runs.items():
+        if algo.hidden or algo.name == "Bloom+Rateless":
+            continue
+
+        color = colors[algo]
+        label = fmt_label(algo)
+        marker = marker_dict[algo]
+
+        line_handle, = ax.plot(similarities, [m.metadata for m in metrics], marker=marker, color=color, lw=2, label=label, markersize=8)
+        legend_handles.append(line_handle)
+
+    # Fix y-axis to [0, 300kB]
+    ax.set_ylim(0, 255_000)
+
+    # Custom legend: includes lines + surface patch
+    fig.legend(
+        handles=legend_handles + [lines.Line2D([], [], color='lightblue', alpha=0.3, lw=10, label='BlRa')],
+        loc="lower center",
+        ncol=(len(visible_algos) + 2) // 3,
+        frameon=False,
+        fontsize=30,
+        title_fontsize=40
+    )
+
+    return fig
 
 
 def plot_transmitted(exp: Experiment, colors: dict[Algorithm, ColorType], marker_dict: dict[Algorithm, str]) -> Figure:
@@ -307,11 +361,13 @@ def main():
 
     for file in args.files:
         # File reading
-        exps = read_experiments(file, include_algorithms, exclude_algorithms, args.min_similarity, args.max_similarity)
+        exps = read_experiments(file, NR_EXPERIMENTS, include_algorithms, exclude_algorithms, args.min_similarity, args.max_similarity)
+        exps.insert(0, {}) #TODO: Remove
+
         #get number of algorithms
                 
         colormap = colormaps.get_cmap("tab10")
-        
+                
         colors = {
             a: colormap(i%10)
             for i, a in enumerate(exps[1].runs.keys())
@@ -343,7 +399,7 @@ def main():
         }
         core = Experiment(exps[1].env, runs)
 
-        transmitted = plot_transmitted(core, colors, marker_dict)
+        transmitted = plot_transmitted_with_surface(core, colors, marker_dict)
         name = f"{Path(file.name).stem}_transmitted.pdf"
         save_or_show(transmitted, name)
 
