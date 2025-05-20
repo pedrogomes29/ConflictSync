@@ -4,7 +4,7 @@ use std::{
     error::Error,
     f64::consts::PI,
     fmt::{self, Display, Formatter},
-    hash::Hash,
+    hash::{Hash, RandomState},
     mem,
 };
 
@@ -42,7 +42,12 @@ where
     pub fn extend(&mut self) {
         let mut filter = BloomFilter::from_raw_parts(self.m, 1);
         self.data.iter().for_each(|d| filter.insert(d));
+        self.bloom_filters.push(filter);
+    }
 
+    pub fn extend_with_hashers(&mut self, hashers: [RandomState; 2]){
+        let mut filter = BloomFilter::from_raw_parts_with_hashers(self.m, 1, hashers);
+        self.data.iter().for_each(|d| filter.insert(d));
         self.bloom_filters.push(filter);
     }
 
@@ -86,6 +91,7 @@ where
                 if recent_angles.len() == window_size {
                     let avg_angle = angle_sum / window_size as f64;
                     if avg_angle < angle_threshold_deg {
+                        eprintln!("Heuristic converged after {} slices",self.bloom_filters.len());
                         return Ok(());
                     }
                 }
@@ -94,6 +100,7 @@ where
             last_normalized = Some(normalized);
             elements = positives.into_iter().chain(negatives.into_iter()).collect(); // rebuild `elements` for next run
         }
+
 
         Err(Box::new(ConvergenceError(format!(
             "Did not converge within {max_runs} runs"
@@ -112,25 +119,25 @@ where
             ))));
         }
 
-        let n_receiver = receiver_data.len();
-        let mut receiver_bf = RatelessBF::new(receiver_data, self.m);
-
         let n_sender = self.data.len();
 
+        let sampled_receiver_data = receiver_data.into_iter().take(n_sender).collect::<Vec<T>>();
+        let n_receiver = sampled_receiver_data.len();
+        let n_sender = self.data.len();
+
+        let mut receiver_bf = RatelessBF::new(sampled_receiver_data, self.m);
+
+        let mut inner_product = 0;
         for _ in 0..max_runs {
             self.extend();
-            receiver_bf.extend();
 
-            let mut inner_product = 0;
-            for (a_filter, b_filter) in self
-                .bloom_filters
-                .iter()
-                .zip(receiver_bf.bloom_filters.iter())
-            {
-                let mut tmp = a_filter.bitslice().to_bitvec();
-                tmp &= b_filter.bitslice();
-                inner_product += tmp.count_ones();
-            }
+            let self_last_slice = self.bloom_filters.last().unwrap();
+            receiver_bf.extend_with_hashers(self_last_slice.hashers());
+
+            let receiver_last_slice= receiver_bf.bloom_filters.last().unwrap();
+            let mut tmp = self_last_slice.bitslice().to_bitvec();
+            tmp &= receiver_last_slice.bitslice();
+            inner_product += tmp.count_ones();            
 
             let estimated_intersection = estimate_intersection(
                 inner_product as f64,
@@ -148,12 +155,13 @@ where
 
             let similarity =
                 (estimated_intersection as f64 + true_negatives as f64) / n_receiver as f64;
-            eprintln!("Similarity {similarity} = {estimated_intersection} + {true_negatives}");
 
             if similarity >= target_similarity {
+                eprintln!("Similarity converged after {} slices",self.bloom_filters.len());
                 return Ok(());
             }
         }
+        
 
         Err(Box::new(ConvergenceError(format!(
             "Did not reach target similarity {target_similarity} in {max_runs} rounds"
@@ -185,4 +193,21 @@ fn estimate_intersection(
     let numerator = observed_inner_product / (k * m) + y.powi(n_receiver) + y.powi(n_sender) - 1.0;
 
     n_receiver + n_sender - (numerator.ln() / y.ln()).round() as i32
+}
+
+
+fn probability_converged(
+    observed_inner_product: f64,
+    desired_intersection: i32,
+    n_receiver: i32,
+    n_sender: i32,
+    k: f64,
+    m: f64
+) -> f64{
+    let y = 1.0 - 1.0/m;
+    let p_same = 1.0 - y.powi(n_sender) - y.powi(n_receiver) + y.powi(n_receiver + n_sender - desired_intersection);
+    let expected_true_bits = k*m*p_same;
+    let delta = observed_inner_product/expected_true_bits - 1.0;
+
+    (-delta*delta*expected_true_bits/(2.0+delta)).exp()
 }

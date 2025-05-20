@@ -49,9 +49,24 @@ where
         }
     }
 
+    pub fn from_raw_parts_with_hashers(m: usize, k: u64, hashers: [RandomState; 2]) -> Self {
+        assert!(m > 0 && k > 0, "m and k should be positive");
+        Self {
+            base: bitvec![0; m],
+            hashers,
+            hashes: k,
+            _marker: PhantomData,
+        }
+    }
+
     #[inline]
     pub fn bitslice(&self) -> &BitSlice {
         &self.base
+    }
+
+    #[inline]
+    pub fn hashers(&self) -> [RandomState; 2] {
+        self.hashers.clone()
     }
 }
 

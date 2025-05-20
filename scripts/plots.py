@@ -53,7 +53,7 @@ similarities = []
 percent_formatter = ticker.PercentFormatter()
 byte_formatter = ticker.EngFormatter(unit="B")
 bit_formatter = ticker.EngFormatter(unit="b")
-NR_EXPERIMENTS = 1
+NR_EXPERIMENTS = 3
 
 def read_algorithm(k: str) -> Algorithm:
     """
@@ -73,6 +73,8 @@ def read_algorithm(k: str) -> Algorithm:
             formatted["m\\_ratio"] = value
         elif pname == "angle":
             formatted["angle"] = value
+        elif pname == "sim":
+            formatted["sim"] = value
 
     return Algorithm(name, formatted, False)
 
@@ -85,7 +87,7 @@ def read_experiments(f: TextIOWrapper, nr_experiments:int, include: set[str] = N
 
 
     headers = []
-    collector = [defaultdict(list[Metrics])] * nr_experiments
+    collector = [defaultdict(list) for _ in range(nr_experiments)]
     start_percentage, end_percentage, nr_steps = map(int, f.readline().rstrip().split())
     step_size = (end_percentage - start_percentage) / nr_steps
     
@@ -138,6 +140,7 @@ def read_experiments(f: TextIOWrapper, nr_experiments:int, include: set[str] = N
                 if min_similarity <= s <= max_similarity:
                     m[algo].append(metrics)
                         
+    
     
     assert len(headers) == nr_experiments
     assert all(
@@ -399,7 +402,7 @@ def main():
         }
         core = Experiment(exps[1].env, runs)
 
-        transmitted = plot_transmitted_with_surface(core, colors, marker_dict)
+        transmitted = plot_transmitted(core, colors, marker_dict)
         name = f"{Path(file.name).stem}_transmitted.pdf"
         save_or_show(transmitted, name)
 

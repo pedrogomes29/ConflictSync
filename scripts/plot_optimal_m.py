@@ -1,4 +1,4 @@
-
+"""
 #Code to obtain minimum
 
 from scipy.optimize import minimize_scalar
@@ -10,7 +10,6 @@ def f(x):
 result = minimize_scalar(f, bounds=(0.01, 5), method='bounded')
 print("Minimum at x =", result.x)
 print("Minimum value =", result.fun)
-"""
 
 import numpy as np
 import matplotlib.pyplot as plt

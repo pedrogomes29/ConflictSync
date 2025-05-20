@@ -67,9 +67,9 @@ where
     let theoretical_minimum = local_only_size + remote_only_size;
 
     let links = [
-        //(Bandwidth::Mbps(10.0), Bandwidth::Mbps(1.0)),
+        (Bandwidth::Mbps(10.0), Bandwidth::Mbps(1.0)),
         (Bandwidth::Mbps(10.0), Bandwidth::Mbps(10.0)),
-        //(Bandwidth::Mbps(1.0), Bandwidth::Mbps(10.0)),
+        (Bandwidth::Mbps(1.0), Bandwidth::Mbps(10.0)),
     ];
 
     for (upload, download) in links {
@@ -168,7 +168,7 @@ where
         }
 
         for m_ratio in [1.0] {
-            for similarity in [0.95] {
+            for similarity in [0.995] {
                 let algo = RBloomRibltHashesSimilarity::new(m_ratio, similarity);
                 run(
                     &algo,
