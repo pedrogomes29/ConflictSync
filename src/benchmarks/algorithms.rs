@@ -155,8 +155,8 @@ where
         }
         */
 
-        for m_ratio in [1.0] {
-            for angle_threshold_deg in [0.2] {
+        for m_ratio in [1.0, 1.0/LN_2] {
+            for angle_threshold_deg in [0.1, 0.2] {
                 let algo = RBloomRibltHashesHeuristic::new(m_ratio, angle_threshold_deg);
                 run(
                     &algo,
@@ -167,8 +167,8 @@ where
             }
         }
 
-        for m_ratio in [1.0] {
-            for similarity in [0.995] {
+        for m_ratio in [1.0/LN_2] {
+            for similarity in [0.99] {
                 let algo = RBloomRibltHashesSimilarity::new(m_ratio, similarity);
                 run(
                     &algo,

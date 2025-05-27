@@ -7,6 +7,8 @@ use std::{
     hash::{Hash, RandomState},
     mem,
 };
+use statrs::distribution::{Beta, ContinuousCDF};
+
 
 #[derive(Debug)]
 struct ConvergenceError(String);
@@ -118,53 +120,59 @@ where
                 "Target similarity {target_similarity} is out of bounds (0.0 to 1.0)"
             ))));
         }
-
+    
         let n_sender = self.data.len();
-
         let sampled_receiver_data = receiver_data.into_iter().take(n_sender).collect::<Vec<T>>();
         let n_receiver = sampled_receiver_data.len();
-        let n_sender = self.data.len();
-
+    
         let mut receiver_bf = RatelessBF::new(sampled_receiver_data, self.m);
+    
+        let mut alpha = 1.0;
+        let mut beta = 1.0;
 
-        let mut inner_product = 0;
         for _ in 0..max_runs {
             self.extend();
-
+    
             let self_last_slice = self.bloom_filters.last().unwrap();
             receiver_bf.extend_with_hashers(self_last_slice.hashers());
-
-            let receiver_last_slice= receiver_bf.bloom_filters.last().unwrap();
+    
+            let receiver_last_slice = receiver_bf.bloom_filters.last().unwrap();
             let mut tmp = self_last_slice.bitslice().to_bitvec();
             tmp &= receiver_last_slice.bitslice();
-            inner_product += tmp.count_ones();            
+    
+            let and_ones = tmp.count_ones();
+    
+            alpha += and_ones as f64;
+            beta += (self.m - and_ones) as f64;
 
-            let estimated_intersection = estimate_intersection(
-                inner_product as f64,
-                n_receiver as i32,
-                n_sender as i32,
-                self.bloom_filters.len() as f64,
-                self.m as f64,
-            );
-
+    
             let true_negatives = receiver_bf
                 .data
                 .iter()
                 .filter(|e| !self.contains(e))
                 .count();
 
-            let similarity =
-                (estimated_intersection as f64 + true_negatives as f64) / n_receiver as f64;
 
-            if similarity >= target_similarity {
-                eprintln!("Similarity converged after {} slices",self.bloom_filters.len());
+
+            let desired_intersection = ((target_similarity*n_receiver as f64) - true_negatives as f64).round();
+    
+            let confidence = probability_converged_beta_tail(
+                alpha,
+                beta,
+                desired_intersection as i32,
+                n_receiver as i32,
+                n_sender as i32,
+                self.m as i32,
+            );
+    
+            if confidence > 0.95 {
+                eprintln!("Converged after {} slices with {:.2}% confidence", self.bloom_filters.len(), confidence * 100.0);
                 return Ok(());
             }
         }
-        
-
+    
         Err(Box::new(ConvergenceError(format!(
-            "Did not reach target similarity {target_similarity} in {max_runs} rounds"
+            "Did not reach confidence > 0.95 in {max_runs} rounds"
         ))))
     }
 
@@ -196,18 +204,22 @@ fn estimate_intersection(
 }
 
 
-fn probability_converged(
-    observed_inner_product: f64,
+fn probability_converged_beta_tail(
+    alpha: f64,
+    beta: f64,
     desired_intersection: i32,
     n_receiver: i32,
     n_sender: i32,
-    k: f64,
-    m: f64
-) -> f64{
-    let y = 1.0 - 1.0/m;
-    let p_same = 1.0 - y.powi(n_sender) - y.powi(n_receiver) + y.powi(n_receiver + n_sender - desired_intersection);
-    let expected_true_bits = k*m*p_same;
-    let delta = observed_inner_product/expected_true_bits - 1.0;
+    m: i32,
+) -> f64 {
+    let y = 1.0 - 1.0 / m as f64;
 
-    (-delta*delta*expected_true_bits/(2.0+delta)).exp()
+    let theta_target =
+        1.0 - y.powi(n_sender) - y.powi(n_receiver) + y.powi(n_sender + n_receiver - desired_intersection);
+
+    if let Ok(beta_dist) = Beta::new(alpha, beta) {
+        1.0 - beta_dist.cdf(theta_target)
+    } else {
+        0.0 // fallback: treat as zero confidence if the distribution fails
+    }
 }
