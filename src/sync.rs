@@ -19,8 +19,7 @@ pub mod bloomribltbuckets;
 pub mod bloomriblthashes;
 pub mod buckets;
 pub mod bucketsriblt;
-pub mod rbloomriblthashes_heuristic;
-pub mod rbloomriblthashes_similarity;
+pub mod rbloomriblthashes;
 pub mod riblthashes;
 
 pub trait Algorithm<T> {

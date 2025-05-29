@@ -7,68 +7,57 @@ use std::{
 };
 
 use crate::{
-    crdt::{Decompose, Extract, Measure},
-    riblt::RatelessIBLT,
-    tracker::{DefaultEvent, DefaultTracker, Telemetry},
+    crdt::{Decompose, Extract, Measure}, rateless_bloom::{StoppingStrategyFactory}, riblt::RatelessIBLT, tracker::{DefaultEvent, DefaultTracker, Telemetry}
 };
 
 use super::{Algorithm, BuildRatelessFilter, Dispatcher};
 
+const WINDOW_SIZE: usize = 1;
 const MAX_NR_RUNS: usize = 1000;
 
 #[derive(Clone, Copy, Debug)]
-pub struct RBloomRibltHashesSimilarity<T> {
+pub struct RBloomRibltHashes<T,F> {
     m_ratio: f64,
-    similarity_threshold: f64,
+    stopping_strategy_factory: F,
     _marker: PhantomData<T>,
 }
 
-impl<T> RBloomRibltHashesSimilarity<T> {
+impl<T, F> RBloomRibltHashes<T,F> {
     #[inline]
     #[must_use]
-    pub fn new(m_ratio: f64, similarity_threshold: f64) -> Self {
-        assert!(
-            (0.0..=90.0).contains(&similarity_threshold),
-            "similarity_threshold should be an angle in the interval (0.0, 90.0)"
-        );
-
+    pub fn new(m_ratio: f64, stopping_strategy_factory: F) -> Self {
         Self {
             m_ratio,
-            similarity_threshold,
+            stopping_strategy_factory,
             _marker: PhantomData,
         }
     }
 }
 
-impl<T> Default for RBloomRibltHashesSimilarity<T> {
-    fn default() -> Self {
-        Self {
-            m_ratio: 1.0,
-            similarity_threshold: 0.95,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<T> Display for RBloomRibltHashesSimilarity<T> {
+impl<T, F> Display for RBloomRibltHashes<T,F>
+where T:Extract, F:StoppingStrategyFactory<T::Item>{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "RBloom+Rateless+Similarity[m_ratio={},sim={}]",
-            self.m_ratio, self.similarity_threshold
+            "RBloom+Rateless+{}[m_ratio={},{}]",
+            self.stopping_strategy_factory.print_name(), self.m_ratio, self.stopping_strategy_factory.print_params()
         )
     }
 }
 
-impl<T> BuildRatelessFilter<T> for RBloomRibltHashesSimilarity<T> where T: Extract {}
-impl<T> Dispatcher<T> for RBloomRibltHashesSimilarity<T> where
+impl<T,F> BuildRatelessFilter<T> for RBloomRibltHashes<T,F> 
+where T: Extract,  {}
+
+
+impl<T,F> Dispatcher<T> for RBloomRibltHashes<T,F> where
     T: Clone + Decompose<Decomposition = T> + Extract
 {
 }
 
-impl<T> Algorithm<T> for RBloomRibltHashesSimilarity<T>
+impl<T,F> Algorithm<T> for RBloomRibltHashes<T,F>
 where
     T: Clone + Decompose<Decomposition = T> + Default + Extract + Measure,
+    F:StoppingStrategyFactory<T::Item>
 {
     type Tracker = DefaultTracker;
 
@@ -92,9 +81,12 @@ where
         let remote_decompositions = remote.split();
         let remote_decompositions_extracted: Vec<_> =
             remote_decompositions.iter().map(|d| d.extract()).collect();
-        if let Err(_) = local_filter.extend_until_target_similarity(
-            remote_decompositions_extracted,
-            self.similarity_threshold,
+
+        
+        let stopping_strategy = self.stopping_strategy_factory.create(remote_decompositions_extracted, local_decompositions.len());
+
+        if let Err(_) = local_filter.extend_until(
+            stopping_strategy,
             MAX_NR_RUNS,
         ) {
             panic!("Local rateless bloom filter did not converge");
@@ -112,9 +104,11 @@ where
 
         // 3. Build a bloom filter from the partion of *probably* common join-decompositions
         let mut remote_filter = self.filter_from(&remote_common, self.m_ratio);
-        if let Err(_) = remote_filter.extend_until_target_similarity(
-            local_decompositions_extracted,
-            self.similarity_threshold,
+        let stopping_strategy = self.stopping_strategy_factory.create(local_decompositions_extracted, remote_common.len());
+
+        
+        if let Err(_) = remote_filter.extend_until(
+            stopping_strategy,
             MAX_NR_RUNS,
         ) {
             panic!("Remote rateless bloom filter did not converge");
@@ -223,7 +217,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{crdt::GSet, tracker::Bandwidth};
+    use crate::{crdt::GSet, rateless_bloom::angle_heuristic::AngleHeuristicFactory, tracker::Bandwidth};
 
     #[test]
     fn test_sync() {
@@ -255,7 +249,8 @@ mod tests {
 
         let (download, upload) = (Bandwidth::Kbps(0.5), Bandwidth::Kbps(0.5));
         let mut tracker = DefaultTracker::new(download, upload);
-        let bloom_buckets = RBloomRibltHashesSimilarity::new(0.5, 1.0);
+        let stopping_strategy_factory = AngleHeuristicFactory::new(1.0, 1);
+        let bloom_buckets = RBloomRibltHashes::new(0.5, stopping_strategy_factory);
 
         bloom_buckets.sync(&mut local, &mut remote, &mut tracker);
         assert_eq!(tracker.false_matches(), 0);

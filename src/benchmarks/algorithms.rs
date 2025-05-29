@@ -7,15 +7,9 @@ use std::{
 };
 
 use crate::{
-    benchmarks::{awsets_with, gsets_with},
-    crdt::{Decompose, Extract, Measure},
-    sync::{
-        Algorithm, baseline::Baseline, bloombuckets::BloomBuckets,
-        bloomribltbuckets::BloomRibltBuckets, bloomriblthashes::BloomRibltHashes, buckets::Buckets,
-        bucketsriblt::RibltBuckets, rbloomriblthashes_heuristic::RBloomRibltHashesHeuristic,
-        rbloomriblthashes_similarity::RBloomRibltHashesSimilarity, riblthashes::RibltHashes,
-    },
-    tracker::{Bandwidth, DefaultEvent, DefaultTracker, Telemetry},
+    benchmarks::{awsets_with, gsets_with}, crdt::{Decompose, Extract, Measure}, rateless_bloom::{angle_heuristic::AngleHeuristicFactory, bayesian_inference_similarity::BayesianInferenceFactory, StoppingStrategyFactory}, sync::{
+        baseline::Baseline, bloombuckets::BloomBuckets, bloomribltbuckets::BloomRibltBuckets, bloomriblthashes::BloomRibltHashes, buckets::Buckets, bucketsriblt::RibltBuckets, rbloomriblthashes::RBloomRibltHashes, riblthashes::RibltHashes, Algorithm
+    }, tracker::{Bandwidth, DefaultEvent, DefaultTracker, Telemetry}
 };
 
 use rand::{SeedableRng, rngs::StdRng};
@@ -157,7 +151,8 @@ where
 
         for m_ratio in [1.0, 1.0/LN_2] {
             for angle_threshold_deg in [0.1, 0.2] {
-                let algo = RBloomRibltHashesHeuristic::new(m_ratio, angle_threshold_deg);
+                let stopping_strategy_factory = AngleHeuristicFactory::new(angle_threshold_deg, 1);
+                let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
                 run(
                     &algo,
                     similar,
@@ -169,7 +164,9 @@ where
 
         for m_ratio in [1.0/LN_2] {
             for similarity in [0.99] {
-                let algo = RBloomRibltHashesSimilarity::new(m_ratio, similarity);
+                let stopping_strategy_factory = BayesianInferenceFactory::new(m_ratio, similarity);
+                let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
+
                 run(
                     &algo,
                     similar,

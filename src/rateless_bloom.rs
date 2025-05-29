@@ -1,14 +1,26 @@
 use super::bloom::BloomFilter;
 use std::{
-    collections::VecDeque,
     error::Error,
-    f64::consts::PI,
     fmt::{self, Display, Formatter},
     hash::{Hash, RandomState},
     mem,
 };
 use statrs::distribution::{Beta, ContinuousCDF};
 
+pub mod angle_heuristic;
+pub mod bayesian_inference_similarity;
+
+pub trait StoppingStrategyFactory<T: Hash> {
+    type Strategy: StoppingStrategy<T>;
+    fn create(&self, elements: Vec<T>, sample_size:usize) -> Self::Strategy;
+    fn print_name(&self) -> String;
+    fn print_params(&self) -> String;
+}
+
+pub trait StoppingStrategy<T: Hash> {
+    fn on_extend(&mut self, bf: &RatelessBF<T>);
+    fn should_stop(&mut self, bf: &RatelessBF<T>) -> bool;
+}
 
 #[derive(Debug)]
 struct ConvergenceError(String);
@@ -59,120 +71,21 @@ where
             .all(|filter| filter.contains(value))
     }
 
-    pub fn extend_until_stable_heuristic(
+    pub fn extend_until<S: StoppingStrategy<T>>(
         &mut self,
-        mut elements: Vec<T>,
-        angle_threshold_deg: f64,
-        window_size: usize,
+        mut strategy: S,
         max_runs: usize,
-    ) -> Result<(), Box<dyn Error>> {
-        let mut recent_angles = VecDeque::with_capacity(window_size);
-        let mut angle_sum = 0.0;
-        let mut last_normalized: Option<f64> = None;
-
-        for _ in 1..=max_runs {
+    )-> Result<(), Box<dyn Error>> {
+        for run in 0..max_runs {
             self.extend();
-
-            let (positives, negatives): (Vec<T>, Vec<T>) =
-                elements.into_iter().partition(|e| self.contains(e));
-
-            let normalized = positives.len() as f64 / (positives.len() + negatives.len()) as f64;
-
-            if let Some(prev) = last_normalized {
-                let dy = normalized - prev;
-                let angle = dy.abs().atan() * 180.0 / PI;
-
-                if recent_angles.len() == window_size {
-                    let removed = recent_angles.pop_front().unwrap();
-                    angle_sum -= removed;
-                }
-
-                recent_angles.push_back(angle);
-                angle_sum += angle;
-
-                if recent_angles.len() == window_size {
-                    let avg_angle = angle_sum / window_size as f64;
-                    if avg_angle < angle_threshold_deg {
-                        eprintln!("Heuristic converged after {} slices",self.bloom_filters.len());
-                        return Ok(());
-                    }
-                }
-            }
-
-            last_normalized = Some(normalized);
-            elements = positives.into_iter().chain(negatives.into_iter()).collect(); // rebuild `elements` for next run
-        }
-
-
-        Err(Box::new(ConvergenceError(format!(
-            "Did not converge within {max_runs} runs"
-        ))))
-    }
-
-    pub fn extend_until_target_similarity(
-        &mut self,
-        receiver_data: Vec<T>,
-        target_similarity: f64,
-        max_runs: usize,
-    ) -> Result<(), Box<dyn Error>> {
-        if !(0.0..=1.0).contains(&target_similarity) {
-            return Err(Box::new(ConvergenceError(format!(
-                "Target similarity {target_similarity} is out of bounds (0.0 to 1.0)"
-            ))));
-        }
-    
-        let n_sender = self.data.len();
-        let sampled_receiver_data = receiver_data.into_iter().take(n_sender).collect::<Vec<T>>();
-        let n_receiver = sampled_receiver_data.len();
-    
-        let mut receiver_bf = RatelessBF::new(sampled_receiver_data, self.m);
-    
-        let mut alpha = 1.0;
-        let mut beta = 1.0;
-
-        for _ in 0..max_runs {
-            self.extend();
-    
-            let self_last_slice = self.bloom_filters.last().unwrap();
-            receiver_bf.extend_with_hashers(self_last_slice.hashers());
-    
-            let receiver_last_slice = receiver_bf.bloom_filters.last().unwrap();
-            let mut tmp = self_last_slice.bitslice().to_bitvec();
-            tmp &= receiver_last_slice.bitslice();
-    
-            let and_ones = tmp.count_ones();
-    
-            alpha += and_ones as f64;
-            beta += (self.m - and_ones) as f64;
-
-    
-            let true_negatives = receiver_bf
-                .data
-                .iter()
-                .filter(|e| !self.contains(e))
-                .count();
-
-
-
-            let desired_intersection = ((target_similarity*n_receiver as f64) - true_negatives as f64).round();
-    
-            let confidence = probability_converged_beta_tail(
-                alpha,
-                beta,
-                desired_intersection as i32,
-                n_receiver as i32,
-                n_sender as i32,
-                self.m as i32,
-            );
-    
-            if confidence > 0.95 {
-                eprintln!("Converged after {} slices with {:.2}% confidence", self.bloom_filters.len(), confidence * 100.0);
+            strategy.on_extend(self);
+            if strategy.should_stop(self) {
+                eprintln!("Converged after {run} runs");
                 return Ok(());
             }
         }
-    
         Err(Box::new(ConvergenceError(format!(
-            "Did not reach confidence > 0.95 in {max_runs} rounds"
+            "Did not converge in {} rounds", max_runs
         ))))
     }
 
