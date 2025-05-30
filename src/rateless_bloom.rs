@@ -8,7 +8,8 @@ use std::{
 use statrs::distribution::{Beta, ContinuousCDF};
 
 pub mod angle_heuristic;
-pub mod bayesian_inference_similarity;
+pub mod bayesian_similarity;
+pub mod bayesian_no_params;
 
 pub trait StoppingStrategyFactory<T: Hash> {
     type Strategy: StoppingStrategy<T>;
@@ -74,19 +75,17 @@ where
     pub fn extend_until<S: StoppingStrategy<T>>(
         &mut self,
         mut strategy: S,
-        max_runs: usize,
-    )-> Result<(), Box<dyn Error>> {
-        for run in 0..max_runs {
+    ){
+        let mut run = 1;
+        loop{
             self.extend();
             strategy.on_extend(self);
             if strategy.should_stop(self) {
                 eprintln!("Converged after {run} runs");
-                return Ok(());
+                return;
             }
+            run+=1;
         }
-        Err(Box::new(ConvergenceError(format!(
-            "Did not converge in {} rounds", max_runs
-        ))))
     }
 
     pub fn size_of(&self) -> usize {

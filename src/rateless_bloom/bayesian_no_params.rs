@@ -4,63 +4,73 @@ use statrs::distribution::{Beta, ContinuousCDF};
 
 use super::{RatelessBF, StoppingStrategy, StoppingStrategyFactory};
 
-pub struct BayesianInferenceSimilarity<T: Hash> {
+
+const HASH_SIZE:usize = std::mem::size_of::<u64>();
+const SYMBOL_SIZE:usize = HASH_SIZE;
+const COUNTER_SIZE:usize = std::mem::size_of::<u64>();
+const IBLT_SYMBOL_SIZE:usize = SYMBOL_SIZE + HASH_SIZE + COUNTER_SIZE;
+const RATELESS_SET_RECONCILIATION_MULTIPLIER:f64 = (1.35+1.72)/2.0;
+
+const fn round_mul(multiplier_millis: usize, value: usize) -> usize {
+    (multiplier_millis * value + 500) / 1000
+}
+
+const RATELESS_SET_RECONCILIATION_MULTIPLIER_MILLIS: usize = 1350;
+const RATELESS_SET_RECONCILIATION_OVERHEAD: usize =
+    HASH_SIZE + round_mul(RATELESS_SET_RECONCILIATION_MULTIPLIER_MILLIS, IBLT_SYMBOL_SIZE);
+
+pub struct BayesianNoParams<T: Hash> {
     receiver_bf: RatelessBF<T>,
     alpha: f64,
     beta: f64,
-    target_similarity: f64,
 }
 
-impl<T: Hash> BayesianInferenceSimilarity<T> {
-    pub fn new(receiver_data: Vec<T>, target_similarity: f64, m_ratio: f64) -> Self {
+impl<T: Hash> BayesianNoParams<T> {
+    pub fn new(receiver_data: Vec<T>, m_ratio: f64) -> Self {
         let m = (receiver_data.len() as f64 * m_ratio).ceil() as usize;
         let receiver_bf = RatelessBF::new(receiver_data, m);
         Self {
             alpha: 1.0,
             beta: 1.0,
-            target_similarity,
             receiver_bf,
         }
     }
 }
 
-pub struct BayesianInferenceFactory {
+pub struct BayesianNoParamsFactory {
     pub m_ratio: f64,
-    pub target_similarity: f64,
 }
 
-impl BayesianInferenceFactory {
-    pub fn new(m_ratio: f64, target_similarity: f64) -> Self {
+impl BayesianNoParamsFactory {
+    pub fn new(m_ratio: f64) -> Self {
         Self {
-            target_similarity,
             m_ratio,
         }
     }
 }
 
-impl<T: Hash> StoppingStrategyFactory<T> for BayesianInferenceFactory {
-    type Strategy = BayesianInferenceSimilarity<T>;
+impl<T: Hash> StoppingStrategyFactory<T> for BayesianNoParamsFactory {
+    type Strategy = BayesianNoParams<T>;
 
     fn create(&self, elements: Vec<T>, sample_size:usize) -> Self::Strategy {
         let elements = elements.into_iter().take(sample_size).collect::<Vec<_>>();
 
-        BayesianInferenceSimilarity::new(
+        BayesianNoParams::new(
             elements,
-            self.target_similarity,
             self.m_ratio,
         )
     }
 
     fn print_name(&self) -> String {
-        "Similarity".to_string()
+        "NoParams".to_string()
     }
     
     fn print_params(&self) -> String {
-        format!("sim={}", self.target_similarity)
+        "".to_string()
     }
 }
 
-impl<T: Hash> StoppingStrategy<T> for BayesianInferenceSimilarity<T> {
+impl<T: Hash> StoppingStrategy<T> for BayesianNoParams<T> {
     fn on_extend(&mut self, sender_bf: &RatelessBF<T>) {
         let last_sender_slice = sender_bf.bloom_filters.last().unwrap();
         self.receiver_bf.extend_with_hashers(last_sender_slice.hashers());
@@ -80,11 +90,15 @@ impl<T: Hash> StoppingStrategy<T> for BayesianInferenceSimilarity<T> {
             .data
             .iter()
             .filter(|e| !sender_bf.contains(e))
-            .count();
+            .count() as i32;
         
-        let desired_intersection = ((self.target_similarity * self.receiver_bf.data.len() as f64)
-            - true_negatives as f64)
-            .round() as i32;
+        let n_sender = sender_bf.data.len() as i32;
+        let m = sender_bf.m;
+        let m_bytes = m/8;
+        let fpr = 1.0 - (1.0 - 1.0/m as f64).powi(n_sender);
+        let desired_new_negatives = m_bytes/RATELESS_SET_RECONCILIATION_OVERHEAD;
+        let desired_false_positives = (desired_new_negatives as f64/(1.0-fpr)).round() as i32;
+        let desired_intersection = n_sender - true_negatives - desired_false_positives;
 
         let confidence = probability_converged_beta_tail(
             self.alpha,
@@ -95,7 +109,7 @@ impl<T: Hash> StoppingStrategy<T> for BayesianInferenceSimilarity<T> {
             sender_bf.m as i32,
         );
 
-        confidence > 0.95
+        confidence > 0.90
     }
 }
 

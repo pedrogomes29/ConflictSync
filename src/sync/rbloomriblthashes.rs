@@ -85,13 +85,8 @@ where
         
         let stopping_strategy = self.stopping_strategy_factory.create(remote_decompositions_extracted, local_decompositions.len());
 
-        if let Err(_) = local_filter.extend_until(
-            stopping_strategy,
-            MAX_NR_RUNS,
-        ) {
-            panic!("Local rateless bloom filter did not converge");
-        };
-
+        local_filter.extend_until(stopping_strategy);
+        
         tracker.register(DefaultEvent::LocalToRemote {
             state: 0,
             metadata: local_filter.size_of(),
@@ -107,12 +102,9 @@ where
         let stopping_strategy = self.stopping_strategy_factory.create(local_decompositions_extracted, remote_common.len());
 
         
-        if let Err(_) = remote_filter.extend_until(
+        remote_filter.extend_until(
             stopping_strategy,
-            MAX_NR_RUNS,
-        ) {
-            panic!("Remote rateless bloom filter did not converge");
-        };
+        );
 
         // 4. Partion the local join-decompositions into *probably* present in both replicas or
         //    *definitely not* present in the remote replica. (same as 2)

@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    benchmarks::{awsets_with, gsets_with}, crdt::{Decompose, Extract, Measure}, rateless_bloom::{angle_heuristic::AngleHeuristicFactory, bayesian_inference_similarity::BayesianInferenceFactory, StoppingStrategyFactory}, sync::{
+    benchmarks::{awsets_with, gsets_with}, crdt::{Decompose, Extract, Measure}, rateless_bloom::{angle_heuristic::AngleHeuristicFactory, bayesian_no_params::{BayesianNoParams, BayesianNoParamsFactory}, bayesian_similarity::BayesianSimilarityFactory, StoppingStrategyFactory}, sync::{
         baseline::Baseline, bloombuckets::BloomBuckets, bloomribltbuckets::BloomRibltBuckets, bloomriblthashes::BloomRibltHashes, buckets::Buckets, bucketsriblt::RibltBuckets, rbloomriblthashes::RBloomRibltHashes, riblthashes::RibltHashes, Algorithm
     }, tracker::{Bandwidth, DefaultEvent, DefaultTracker, Telemetry}
 };
@@ -149,6 +149,7 @@ where
         }
         */
 
+        /*
         for m_ratio in [1.0, 1.0/LN_2] {
             for angle_threshold_deg in [0.1, 0.2] {
                 let stopping_strategy_factory = AngleHeuristicFactory::new(angle_threshold_deg, 1);
@@ -161,10 +162,11 @@ where
                 );
             }
         }
+        */
 
         for m_ratio in [1.0/LN_2] {
-            for similarity in [0.99] {
-                let stopping_strategy_factory = BayesianInferenceFactory::new(m_ratio, similarity);
+            for similarity in [0.98,0.99,0.995] {
+                let stopping_strategy_factory = BayesianSimilarityFactory::new(m_ratio, similarity);
                 let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
 
                 run(
@@ -174,6 +176,18 @@ where
                     (remote.clone(), download),
                 );
             }
+        }
+
+        for m_ratio in [1.0/LN_2] {
+            let stopping_strategy_factory = BayesianNoParamsFactory::new(m_ratio);
+            let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
+
+            run(
+                &algo,
+                similar,
+                (local.clone(), upload),
+                (remote.clone(), download),
+            );
         }
     }
 }

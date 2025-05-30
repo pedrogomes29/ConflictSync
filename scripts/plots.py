@@ -13,7 +13,7 @@ from matplotlib.typing import ColorType
 from matplotlib import colormaps
 import numpy as np
 from matplotlib import lines
-
+import math
 
 
 class Header(NamedTuple):
@@ -70,7 +70,10 @@ def read_algorithm(k: str) -> Algorithm:
         elif pname == "lf":
             formatted["f_{ld}"] = value
         elif pname == "m_ratio":
-            formatted["m\\_ratio"] = value
+            if math.isclose(float(value), 1 / math.log(2), rel_tol=1e-3):
+                formatted["m\\_ratio"] = "1/ln(2)"
+            else:
+                formatted["m\\_ratio"] = value
         elif pname == "angle":
             formatted["angle"] = value
         elif pname == "sim":
