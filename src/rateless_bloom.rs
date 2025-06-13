@@ -1,9 +1,6 @@
 use super::bloom::BloomFilter;
 use std::{
-    error::Error,
-    fmt::{self, Display, Formatter},
-    hash::{Hash, RandomState},
-    mem,
+    cmp::max, error::Error, fmt::{self, Display, Formatter}, hash::{Hash, RandomState}, mem
 };
 use statrs::distribution::{Beta, ContinuousCDF};
 
@@ -50,7 +47,7 @@ where
         Self {
             bloom_filters: Vec::new(),
             data,
-            m,
+            m: max(m,1),
         }
     }
 
@@ -76,12 +73,14 @@ where
         &mut self,
         mut strategy: S,
     ){
+        //eprintln!("BF size: {}", self.data.len());
+
         let mut run = 1;
         loop{
             self.extend();
             strategy.on_extend(self);
             if strategy.should_stop(self) {
-                eprintln!("Converged after {run} runs");
+                //eprintln!("Coverged after {run} runs");
                 return;
             }
             run+=1;

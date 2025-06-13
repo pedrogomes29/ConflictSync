@@ -1,23 +1,57 @@
 #![allow(dead_code)]
 
 use std::{
-    f64::consts::LN_2,
-    fmt::Display,
-    time::{Duration, Instant},
+    f64::consts::LN_2, fmt::Display, time::{Duration, Instant}
 };
 
 use crate::{
-    benchmarks::{awsets_with, gsets_with}, crdt::{Decompose, Extract, Measure}, rateless_bloom::{angle_heuristic::AngleHeuristicFactory, bayesian_no_params::{BayesianNoParams, BayesianNoParamsFactory}, bayesian_similarity::BayesianSimilarityFactory, StoppingStrategyFactory}, sync::{
+    benchmarks::{awsets_with, gsets_with, pncounters_with}, crdt::{Decompose, Extract, Measure}, rateless_bloom::{angle_heuristic::AngleHeuristicFactory, bayesian_no_params::{BayesianNoParams, BayesianNoParamsFactory}, bayesian_similarity::BayesianSimilarityFactory, StoppingStrategyFactory}, sync::{
         baseline::Baseline, bloombuckets::BloomBuckets, bloomribltbuckets::BloomRibltBuckets, bloomriblthashes::BloomRibltHashes, buckets::Buckets, bucketsriblt::RibltBuckets, rbloomriblthashes::RBloomRibltHashes, riblthashes::RibltHashes, Algorithm
     }, tracker::{Bandwidth, DefaultEvent, DefaultTracker, Telemetry}
 };
 
 use rand::{SeedableRng, rngs::StdRng};
 
+const NR_TRIALS:usize = 30;
+
 type Replica<T> = (T, Bandwidth);
 
+//creates a vector of events corresponding to the average event for each message over multiple experiments
+fn average_tracker_events(
+    message_to_events: Vec<Vec<DefaultEvent>>,
+    nr_experiments: usize,
+    upload: Bandwidth,
+    download: Bandwidth,
+) -> Vec<DefaultEvent> {
+    message_to_events
+        .into_iter()
+        .map(|message_events| {
+            let (total_state, total_metadata): (usize, usize) = message_events.iter().fold((0, 0), |(s, m), e| {
+                let (event_state, event_metadata) = match e {
+                    DefaultEvent::LocalToRemote { state, metadata, .. }
+                    | DefaultEvent::RemoteToLocal { state, metadata, .. } => (*state, *metadata),
+                };
+                (s + event_state, m + event_metadata)
+            });
+
+            let avg_state = total_state / nr_experiments;
+            let avg_metadata = total_metadata / nr_experiments;
+
+            match message_events.first().expect("Expected at least one event") {
+                DefaultEvent::LocalToRemote { .. } => {
+                    DefaultEvent::LocalToRemote { state: avg_state, metadata: avg_metadata, upload }
+                }
+                DefaultEvent::RemoteToLocal { .. } => {
+                    DefaultEvent::RemoteToLocal { state: avg_state, metadata: avg_metadata, download }
+                }
+            }
+        })
+        .collect()
+}
+
+
 /// Runs the specified protocol and outputs the metrics obtained.
-fn run<T, A>(algo: &A, similar: f64, local: Replica<T>, remote: Replica<T>)
+fn run<T, A>(algo: &A, similar: f64, local: Replica<T>, remote: Replica<T>) -> DefaultTracker
 where
     T: Clone + Decompose<Decomposition = T> + Default + Extract + Measure,
     A: Algorithm<T, Tracker = DefaultTracker> + Display,
@@ -27,6 +61,8 @@ where
         "similarity should be a ratio between 0.0 and 1.0"
     );
 
+    //eprintln!("{algo}");
+
     let (mut local, upload) = local;
     let (mut remote, download) = remote;
 
@@ -35,10 +71,39 @@ where
 
     let diffs = tracker.false_matches();
     if diffs > 0 {
-        eprintln!("{algo} not totally synced with {diffs} false matches");
+        panic!("{algo} not totally synced with {diffs} false matches");
     }
 
-    let events = tracker.events();
+    tracker
+}
+
+fn run_trial<T,A>(algo: &A, similar: f64, replicas: Vec<(T,T)>, upload:Bandwidth, download:Bandwidth)
+where
+    T: Clone + Decompose<Decomposition = T> + Default + Extract + Measure,
+    A: Algorithm<T, Tracker = DefaultTracker> + Display,
+{
+    let nr_experiments = replicas.len();
+    let message_to_events = replicas.into_iter().enumerate().fold(
+        Vec::<Vec<DefaultEvent>>::new(),
+        |mut acc, (trial_nr, (local, remote))| {
+            let tracker = run(
+                algo,
+                similar,
+                (local, upload),
+                (remote, download),
+            );
+            for (idx, event) in tracker.events().iter().cloned().enumerate() {
+                if idx == acc.len() {
+                    acc.push(Vec::new());
+                }
+                acc[idx].push(event);
+            }
+            acc
+        },
+    );
+    
+    let events = average_tracker_events(message_to_events, nr_experiments, upload, download);
+
     println!(
         "{algo} {} {} {:.3}",
         events.iter().map(DefaultEvent::state).sum::<usize>(),
@@ -49,16 +114,21 @@ where
             .sum::<Duration>()
             .as_secs_f64(),
     );
+
 }
 
-fn run_with<T>(similar: f64, local: T, remote: T)
+
+
+fn run_with<T>(similar: f64, replicas: Vec<(T,T)>)
 where
     T: Clone + Decompose<Decomposition = T> + Default + Extract + Measure,
-{
-    let local_only_size = <T as Measure>::size_of(&local.difference(&remote));
-    let remote_only_size = <T as Measure>::size_of(&remote.difference(&local));
+{   
 
-    let theoretical_minimum = local_only_size + remote_only_size;
+    let theoretical_minimum: usize = replicas.iter().map(|(local, remote)|-> usize{
+        let local_only_size = <T as Measure>::size_of(&local.difference(&remote));
+        let remote_only_size = <T as Measure>::size_of(&remote.difference(&local));
+        local_only_size + remote_only_size
+    }).sum::<usize>()/replicas.len();
 
     let links = [
         (Bandwidth::Mbps(10.0), Bandwidth::Mbps(1.0)),
@@ -75,49 +145,54 @@ where
 
         /*
         let algo = Baseline::new();
-        run(
+        run_trial(
             &algo,
             similar,
-            (local.clone(), upload),
-            (remote.clone(), download),
+            replicas.clone(),
+            upload,
+            download
         );
 
         for lf in [0.2, 1.0, 5.0] {
             let algo = Buckets::new(lf);
-            run(
+            run_trial(
                 &algo,
                 similar,
-                (local.clone(), upload),
-                (remote.clone(), download),
+                replicas.clone(),
+                upload,
+                download
             );
         }
 
         for lf in [0.2, 1.0, 5.0] {
             let algo = RibltBuckets::new(lf);
-            run(
+            run_trial(
                 &algo,
                 similar,
-                (local.clone(), upload),
-                (remote.clone(), download),
+                replicas.clone(),
+                upload,
+                download
             );
         }
 
         let algo = RibltHashes::new();
-        run(
+        run_trial(
             &algo,
             similar,
-            (local.clone(), upload),
-            (remote.clone(), download),
+            replicas.clone(),
+            upload,
+            download
         );
 
         for fpr in [0.01, 0.25] {
             for lf in [1.0, 0.2] {
                 let algo = BloomBuckets::new(fpr, lf);
-                run(
+                run_trial(
                     &algo,
                     similar,
-                    (local.clone(), upload),
-                    (remote.clone(), download),
+                    replicas.clone(),
+                    upload,
+                    download
                 );
             }
         }
@@ -125,55 +200,56 @@ where
         for fpr in [0.01, 0.25] {
             for lf in [1.0, 0.2] {
                 let algo = BloomRibltBuckets::new(fpr, lf);
-                run(
+                run_trial(
                     &algo,
                     similar,
-                    (local.clone(), upload),
-                    (remote.clone(), download),
+                    replicas.clone(),
+                    upload,
+                    download
                 );
             }
         }
-        */
 
-        /*
-        let fprs: Vec<f64> = (1..=500).map(|i| i as f64 / 1000.0).collect();
-
-        for fpr in fprs {
+        
+        for fpr in [0.01, 0.1, 0.25]  {
             let algo = BloomRibltHashes::new(fpr);
-            run(
+            run_trial(
                 &algo,
                 similar,
-                (local.clone(), upload),
-                (remote.clone(), download),
+                replicas.clone(),
+                upload,
+                download
             );
         }
-        */
+        */        
 
-        /*
-        for m_ratio in [1.0, 1.0/LN_2] {
-            for angle_threshold_deg in [0.1, 0.2] {
+        
+        for m_ratio in [1.0/LN_2] {
+            for angle_threshold_deg in [0.2, 0.35, 0.5] {
                 let stopping_strategy_factory = AngleHeuristicFactory::new(angle_threshold_deg, 1);
                 let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
-                run(
+                run_trial(
                     &algo,
                     similar,
-                    (local.clone(), upload),
-                    (remote.clone(), download),
+                    replicas.clone(),
+                    upload,
+                    download
                 );
             }
         }
-        */
 
+        
         for m_ratio in [1.0/LN_2] {
-            for similarity in [0.98,0.99,0.995] {
-                let stopping_strategy_factory = BayesianSimilarityFactory::new(m_ratio, similarity);
+            for target_similarity in [0.97, 0.99, 0.995] {
+                let stopping_strategy_factory = BayesianSimilarityFactory::new(m_ratio, target_similarity);
                 let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
 
-                run(
+                run_trial(
                     &algo,
                     similar,
-                    (local.clone(), upload),
-                    (remote.clone(), download),
+                    replicas.clone(),
+                    upload,
+                    download
                 );
             }
         }
@@ -182,17 +258,18 @@ where
             let stopping_strategy_factory = BayesianNoParamsFactory::new(m_ratio);
             let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
 
-            run(
+            run_trial(
                 &algo,
                 similar,
-                (local.clone(), upload),
-                (remote.clone(), download),
+                replicas.clone(),
+                upload,
+                download
             );
         }
     }
 }
 
-fn run_experiment<T, F>(label: &str, create_replicas: F)
+fn run_experiment<T, F>(label: &str, nr_trials: usize, create_replicas: F)
 where
     T: Clone + Decompose<Decomposition = T> + Default + Extract + Measure,
     F: Fn(f64) -> (T, T),
@@ -210,19 +287,19 @@ where
     println!("{start_similarity} {end_similarity} {nr_steps}");
 
     for s in similarities {
-        let (local, remote) = create_replicas(s);
+        let replicas: Vec<_>= (0..nr_trials).map(|_|create_replicas(s)).collect();
         eprintln!(
             "[{:.2?}] {label} with similarity {s} generated",
             exec_time.elapsed()
         );
-        run_with(s, local, remote);
+        run_with(s, replicas);
     }
 
     eprintln!("[{:.2?}] exiting...", exec_time.elapsed());
 }
 
 pub fn run_gset_experiment() {
-    run_experiment("gsets", |s| {
+    run_experiment("gsets", NR_TRIALS, |s| {
         let mut rng = StdRng::seed_from_u64(rand::random());
         gsets_with(100_000, s, &mut rng)
     });
@@ -234,8 +311,15 @@ pub fn run_awset_experiment() {
     // media [1].
     //
     // [1]: https://www.researchgate.net/publication/367503309_Engagement_with_fact-checked_posts_on_Reddit
-    run_experiment("awsets", |s| {
+    run_experiment("awsets", NR_TRIALS, |s| {
         let mut rng = StdRng::seed_from_u64(rand::random());
         awsets_with(20_000, s, 0.2, &mut rng)
+    });
+}
+
+pub fn run_pncounter_experiment() {
+    run_experiment("pncounters", NR_TRIALS, |s| {
+        let mut rng = StdRng::seed_from_u64(rand::random());
+        pncounters_with(100_000, s, &mut rng)
     });
 }

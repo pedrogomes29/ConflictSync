@@ -83,7 +83,7 @@ def plot_experiments(experiments: list[Experiment]) -> plt.Figure:
             convergence_run = run_nrs[convergence_idx]
             ax.scatter(convergence_run, normalized_positives[convergence_idx], color='red', s=100, marker='*', zorder=5)
             ax.annotate(
-                f"{convergence_run}", 
+                f"{convergence_run + 1}", 
                 (convergence_run, normalized_positives[convergence_idx]),
                 textcoords="offset points",
                 xytext=(0, 10),
@@ -93,8 +93,8 @@ def plot_experiments(experiments: list[Experiment]) -> plt.Figure:
             )
             
 
-    ax.set_title("Positives vs Run Number")
-    ax.set_xlabel("Run Number")
+    ax.set_title("Positives vs Slice")
+    ax.set_xlabel("Slice")
     ax.set_ylabel("Positives (divided by set size)")
     ax.grid(True)
     ax.legend(title="Similarity")

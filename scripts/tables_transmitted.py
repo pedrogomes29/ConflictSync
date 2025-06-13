@@ -71,7 +71,7 @@ def textable(name: str, points: list[int], values: dict[str, list[str]], bold_mi
     # Prepare matrix of values for comparisons
     matrix = []
     for algo, vals in values.items():
-        selected = [vals[i] for i in indexes]
+        selected = [vals[i].replace("−", "-") for i in indexes]
         matrix.append((algo, selected))
 
     # Find min values per column
@@ -95,11 +95,12 @@ def textable(name: str, points: list[int], values: dict[str, list[str]], bold_mi
         return f"\t\t\\{kind}rule"
 
     centering = "\t\\centering"
+    font_size = "\t\\footnotesize"
     caption = f"\t\\caption{{{name.replace('_', ' ').title()}}}"
     label = f"\t\\label{{tab:{name}}}"
 
     return "\n".join(
-        ["\\begin{table*}[h]", centering]
+        ["\\begin{table*}[h]", font_size, centering]
         + [f"\t\\begin{{tabular}}{{{cols}}}", rule("top"), header, rule("mid")]
         + rows
         + [rule("bottom"), "\t\\end{tabular}"]
@@ -111,20 +112,23 @@ def main():
     """Produces tables in tex format"""
     parser = argparse.ArgumentParser(prog="plotter")
     parser.add_argument("file", nargs="?", default=("-"), type=argparse.FileType("r"))
+    parser.add_argument("--data_type_name", help="Optional name of the data type", default=None)
+
     args = parser.parse_args()
 
     percentages = [0, 25, 50, 75, 90, 95, 100]
-    dtype = pathlib.Path(args.file.name).stem
+    dtype = args.data_type_name or pathlib.Path(args.file.name).stem
 
     total = read(args.file, name="total")
     metadata = read(args.file, name="metadata")
     redundancy = read(args.file, name="redundancy")
 
-    total_table = textable(f"{dtype}_total", percentages, total, True)
-    metadata_table = textable(f"{dtype}_metadata", percentages, metadata)
-    redundancy_table = textable(f"{dtype}_redundancy", percentages, redundancy)
+    #total_table = textable(f"{dtype}_transmitted_total", percentages, total, True)
+    metadata_table = textable(f"{dtype}_transmitted_metadata", percentages, metadata, True)
+    #redundancy_table = textable(f"{dtype}_transmitted_redundancy", percentages, redundancy)
+    print(metadata_table, sep="\n\n")
 
-    print(total_table, metadata_table, redundancy_table, sep="\n\n")
+    #print(total_table, metadata_table, redundancy_table, sep="\n\n")
 
 
 if __name__ == "__main__":

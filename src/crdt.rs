@@ -1,7 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-    mem,
+    cmp::max, collections::{HashMap, HashSet}, hash::Hash, mem
 };
 
 use either::*;
@@ -580,5 +578,369 @@ mod awset {
             local.false_matches(&remote),
             local_elems.symmetric_difference(&remote_elems).count()
         )
+    }
+}
+
+
+#[derive(Clone, Debug, Default)]
+pub struct PNCounter<I> {
+    inner: HashMap<I, (u64, u64)>,
+}
+
+impl<I> PNCounter<I>{
+    #[inline]
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            inner: HashMap::default(),
+        }
+    }
+}
+
+impl<I> PNCounter<I>
+where
+    I: Eq + Hash,
+{
+    pub fn count(&self) -> i64 {
+        self.inner.values().map(|(incr, decr)| *incr as i64 - *decr as i64).sum()
+    }
+}
+
+
+impl<I> PNCounter<I>
+where
+    I: Clone + Eq + Hash,
+{
+    pub fn increment(&mut self, id: &I) -> Self {
+        self.add(id, 1)
+    }
+
+    pub fn add(&mut self, id: &I, value: u64) -> Self{
+        match self.inner.get_mut(id) {
+            Some((incr, decr)) => *incr += value,
+            None => {
+                self.inner.insert(id.clone(), (value, 0));
+            }
+        }
+
+        let (key_ref, value_ref) = self
+        .inner
+        .get_key_value(id)
+        .expect("key not found in counter");
+    
+        let entry = (key_ref.clone(), value_ref.clone());
+
+        Self {
+            inner: HashMap::from([entry]),
+        }
+    }
+
+    pub fn decrement(&mut self, id: &I) -> Self {
+        self.sub(id, 1)
+    }
+
+    pub fn sub(&mut self, id: &I, value: u64) -> Self{
+        match self.inner.get_mut(id) {
+            Some((incr, decr)) => *decr += value,
+            None => {
+                self.inner.insert(id.clone(), (0, value));
+            }
+        }
+
+        let (key_ref, value_ref) = self
+        .inner
+        .get_key_value(id)
+        .expect("key not found in counter");
+    
+        let entry = (key_ref.clone(), value_ref.clone());
+
+        Self {
+            inner: HashMap::from([entry]),
+        }
+    }
+}
+
+
+impl<I> Decompose for PNCounter<I>
+where
+    I: Clone + Eq + Hash,
+{
+    type Decomposition = PNCounter<I>;
+
+    fn split(&self) -> Vec<Self::Decomposition> {
+        self.inner.iter().map(|(id, v)| Self {
+            inner: HashMap::from([(id.clone(), v.clone())]),
+        }).collect()
+    }
+
+    fn join(&mut self, deltas: Vec<Self::Decomposition>) {
+        for delta in deltas {
+            for (id, val) in &delta.inner {
+                let (delta_incr,delta_decr) = val;
+                self.inner
+                    .entry(id.clone())
+                    .and_modify(|(incr,decr)| {
+                        *incr = max(*incr, *delta_incr);
+                        *decr = max(*decr, *delta_decr);
+                    })
+                    .or_insert_with(|| val.clone());
+            }
+        }
+    }
+
+    fn difference(&self, remote: &Self::Decomposition) -> Self::Decomposition {
+        let mut result = HashMap::new();
+    
+        for (id, val) in &self.inner {
+            let (incr_local, decr_local) = val;
+            match remote.inner.get(id) {
+                Some((incr_remote, decr_remote)) 
+                    if ! (incr_local <= incr_remote && decr_local <= decr_remote) => { 
+                        //if local is not less than or equal to remote
+                    result.insert(id.clone(), val.clone());
+                }
+                None => {
+                    result.insert(id.clone(), val.clone());
+                }
+                _ => {}
+            }
+        }
+    
+        Self::Decomposition { inner: result }
+    }
+}
+    
+
+impl<I> Extract for PNCounter<I>
+where
+    I: Clone + Eq + Hash,
+{
+    type Item = (I, (u64,u64));
+
+    fn extract(&self) -> Self::Item {
+        assert_eq!(
+            self.inner.len(),
+            1,
+            "a join-decomposition should have a single item"
+        );
+
+
+        let (id, val) = self.inner.iter().next().unwrap();
+
+        (id.clone(), val.clone())
+    }
+}
+
+
+
+impl Measure for PNCounter<String> {
+    fn len(replica: &Self) -> usize {
+        replica.inner.len()
+    }
+
+    fn size_of(replica: &Self) -> usize {
+        replica.inner.len() * 2 * mem::size_of::<u64>()
+            + replica.inner.keys().map(String::len).sum::<usize>()
+    }
+
+    fn false_matches(&self, other: &Self) -> usize {
+        let only_in_self = self.inner.iter()
+            .filter(|(id, val_self)| {
+                match other.inner.get(*id) {
+                    Some(val_other) => *val_self != val_other,
+                    None => true,
+                }
+            })
+            .count();
+    
+        let only_in_other = other.inner.keys()
+            .filter(|id| !self.inner.contains_key(*id))
+            .count();
+    
+        only_in_self + only_in_other
+    }
+}
+
+
+impl<I> PartialEq for PNCounter<I>
+where
+    I: Eq + Hash,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl<I> Eq for PNCounter<I> where I: Eq + Hash {}
+
+#[cfg(test)]
+mod pncounter {
+    use super::*;
+
+    #[test]
+    fn test_increment_and_decrement() {
+        let mut counter = PNCounter::new();
+        assert_eq!(counter.count(), 0);
+
+        counter.increment(&"a".to_string());
+        assert_eq!(counter.count(), 1);
+
+        counter.add(&"b".to_string(), 5);
+        assert_eq!(counter.count(), 6);
+
+        counter.decrement(&"a".to_string());
+        assert_eq!(counter.count(), 5);
+
+        counter.sub(&"b".to_string(), 2);
+        assert_eq!(counter.count(), 3);
+
+        counter.increment(&"c".to_string());
+        assert_eq!(counter.count(), 4);
+
+        counter.sub(&"d".to_string(), 10); // Decrement a non-existent key
+        assert_eq!(counter.count(), -6);
+    }
+
+    #[test]
+    fn test_count() {
+        let mut counter = PNCounter::new();
+        counter.increment(&"item1".to_string()); // +1
+        counter.increment(&"item1".to_string()); // +1
+        counter.decrement(&"item1".to_string()); // -1
+        counter.increment(&"item2".to_string()); // +1
+        counter.sub(&"item3".to_string(), 5); // -5
+
+        assert_eq!(counter.count(), -3); // (1+1-1) + 1 + (-5) = 1 + 1 - 5 = -3
+    }
+
+    #[test]
+    fn test_split_and_join() {
+        let mut splittable = PNCounter::new();
+        splittable.increment(&"a".to_string());
+        splittable.add(&"b".to_string(), 3);
+        splittable.decrement(&"a".to_string());
+        splittable.sub(&"c".to_string(), 2);
+
+        let initial_count = splittable.count();
+        let decompositions = splittable.split();
+        assert_eq!(decompositions.len(), splittable.inner.len());
+
+        let mut joinable = PNCounter::new();
+        joinable.join(decompositions);
+
+        assert_eq!(joinable.count(), initial_count);
+        assert_eq!(joinable, splittable);
+    }
+
+    #[test]
+    fn test_difference() {
+        let local = PNCounter {
+            inner: HashMap::from([
+                ("a".to_string(), (5, 2)),
+                ("b".to_string(), (3, 1)),
+                ("c".to_string(), (0, 4)),
+            ]),
+        };
+
+        let remote = PNCounter {
+            inner: HashMap::from([
+                ("a".to_string(), (4, 2)),
+                ("b".to_string(), (3, 2)),
+                ("d".to_string(), (1, 0)),
+            ]),
+        };
+
+        let diff = local.difference(&remote);
+
+        let expected_inner = HashMap::from([
+            ("a".to_string(), (5, 2)),
+            ("c".to_string(), (0, 4)),
+        ]);
+        assert_eq!(diff.inner, expected_inner);
+    }
+
+    #[test]
+    fn test_difference_synced() {
+        let local = PNCounter {
+            inner: HashMap::from([
+                ("a".to_string(), (5, 2)),
+                ("b".to_string(), (3, 1)),
+            ]),
+        };
+        let remote = local.clone();
+
+        let diff = local.difference(&remote);
+        assert!(diff.inner.is_empty());
+    }
+
+    #[test]
+    fn test_false_matches() {
+        let local = PNCounter {
+            inner: HashMap::from([
+                ("a".to_string(), (5, 2)),
+                ("b".to_string(), (3, 1)),
+                ("c".to_string(), (0, 4)),
+            ]),
+        };
+
+        let remote = PNCounter {
+            inner: HashMap::from([
+                ("a".to_string(), (5, 2)), // Matches exactly
+                ("b".to_string(), (3, 2)), // Mismatch in decrement
+                ("d".to_string(), (1, 0)), // Only in remote
+            ]),
+        };
+
+        // "a" matches
+        // "b" mismatches (value differs) -> 1 false match
+        // "c" only in local -> 1 false match
+        // "d" only in remote -> 1 false match
+
+        assert_eq!(local.false_matches(&remote), 3);
+    }
+
+    #[test]
+    fn test_join() {
+        let mut counter1 = PNCounter::new();
+        counter1.increment(&"a".to_string()); // a: (1, 0)
+        counter1.add(&"b".to_string(), 5);    // b: (5, 0)
+
+        let mut counter2 = PNCounter::new();
+        counter2.increment(&"a".to_string()); // a: (1, 0)
+        counter2.add(&"a".to_string(), 2);    // a: (3, 0)
+        counter2.decrement(&"b".to_string()); // b: (0, 1)
+        counter2.sub(&"c".to_string(), 4);    // c: (0, 4)
+
+        // Simulate deltas that would come from splitting other replicas
+        let delta1 = PNCounter {
+            inner: HashMap::from([
+                ("a".to_string(), (1, 0)),
+                ("b".to_string(), (5, 0)),
+            ]),
+        };
+
+        let delta2 = PNCounter {
+            inner: HashMap::from([
+                ("a".to_string(), (3, 0)), // Higher increment for 'a'
+                ("b".to_string(), (0, 1)), // Higher decrement for 'b'
+                ("c".to_string(), (0, 4)),
+            ]),
+        };
+
+        let mut combined_counter = PNCounter::new();
+        combined_counter.join(vec![delta1, delta2]);
+
+        // Expected state after join:
+        // 'a': max(1, 3) = 3 for increment, max(0, 0) = 0 for decrement => (3, 0)
+        // 'b': max(5, 0) = 5 for increment, max(0, 1) = 1 for decrement => (5, 1)
+        // 'c': max(0, 0) = 0 for increment, max(0, 4) = 4 for decrement => (0, 4)
+        let expected_inner = HashMap::from([
+            ("a".to_string(), (3, 0)),
+            ("b".to_string(), (5, 1)),
+            ("c".to_string(), (0, 4)),
+        ]);
+
+        assert_eq!(combined_counter.inner, expected_inner);
+        assert_eq!(combined_counter.count(), 3 + 5 - 1 - 4); // 3 for 'a', 4 for 'b', -4 for 'c' = 3
     }
 }

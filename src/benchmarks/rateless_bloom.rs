@@ -40,7 +40,7 @@ where
     F: Fn(f64) -> (T, T),
 {
     let exec_time = Instant::now();
-    let nr_steps = 5;
+    let nr_steps = 100;
     let start_similarity = 0;
     let end_similarity = 100;
     let step = ((end_similarity - start_similarity) as f64) / nr_steps as f64;

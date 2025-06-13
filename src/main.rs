@@ -9,6 +9,7 @@ mod rateless_bloom;
 mod riblt;
 mod sync;
 mod tracker;
+mod bayesian_estimation;
 
 /// Entry point for the execution of the experiments.
 ///
@@ -35,6 +36,8 @@ fn main() {
         //
         // [1]: https://www.researchgate.net/publication/367503309_Engagement_with_fact-checked_posts_on_Reddit
         "awset" => benchmarks::algorithms::run_awset_experiment(),
+
+        "pncounter" => benchmarks::algorithms::run_pncounter_experiment(),
 
         "ratelessbf" => benchmarks::rateless_bloom::run_gset_experiment(),
 

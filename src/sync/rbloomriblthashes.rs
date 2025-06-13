@@ -39,7 +39,7 @@ where T:Extract, F:StoppingStrategyFactory<T::Item>{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "RBloom+Rateless+{}[m_ratio={},{}]",
+            "RBloom+Rateless+{}[m={},{}]",
             self.stopping_strategy_factory.print_name(), self.m_ratio, self.stopping_strategy_factory.print_params()
         )
     }

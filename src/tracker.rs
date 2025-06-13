@@ -35,7 +35,7 @@ impl Bandwidth {
 /// Type of Event used by the [`DefaultTracker`].
 /// It holds the size of the transfered payload in Bytes and estimates the duration based on the
 /// bandwidth provided by the tracker that registers these kind of events.
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum DefaultEvent {
     LocalToRemote {
         state: usize,
