@@ -12,7 +12,7 @@ use crate::{
 
 use rand::{SeedableRng, rngs::StdRng};
 
-const NR_TRIALS:usize = 30;
+const NR_TRIALS:usize = 1;
 
 type Replica<T> = (T, Bandwidth);
 
@@ -174,7 +174,9 @@ where
                 download
             );
         }
+        */
 
+        
         let algo = RibltHashes::new();
         run_trial(
             &algo,
@@ -183,7 +185,10 @@ where
             upload,
             download
         );
+        
 
+
+        /*        
         for fpr in [0.01, 0.25] {
             for lf in [1.0, 0.2] {
                 let algo = BloomBuckets::new(fpr, lf);
@@ -196,6 +201,7 @@ where
                 );
             }
         }
+
 
         for fpr in [0.01, 0.25] {
             for lf in [1.0, 0.2] {
@@ -211,6 +217,7 @@ where
         }
 
         
+
         for fpr in [0.01, 0.1, 0.25]  {
             let algo = BloomRibltHashes::new(fpr);
             run_trial(
@@ -221,11 +228,23 @@ where
                 download
             );
         }
-        */        
+        */
 
-        
+        for i in 1..=100 {
+            let fpr = i as f64 * 0.005;
+            let algo = BloomRibltHashes::new(fpr);
+            run_trial(
+                &algo,
+                similar,
+                replicas.clone(),
+                upload,
+                download,
+            );
+        }
+      
+        /*
         for m_ratio in [1.0/LN_2] {
-            for angle_threshold_deg in [0.2, 0.35, 0.5] {
+            for angle_threshold_deg in [0.2, 0.5, 1.0] {
                 let stopping_strategy_factory = AngleHeuristicFactory::new(angle_threshold_deg, 1);
                 let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
                 run_trial(
@@ -238,6 +257,7 @@ where
             }
         }
 
+        
         
         for m_ratio in [1.0/LN_2] {
             for target_similarity in [0.97, 0.99, 0.995] {
@@ -253,6 +273,7 @@ where
                 );
             }
         }
+        */
 
         for m_ratio in [1.0/LN_2] {
             let stopping_strategy_factory = BayesianNoParamsFactory::new(m_ratio);
@@ -275,7 +296,7 @@ where
     F: Fn(f64) -> (T, T),
 {
     let exec_time = Instant::now();
-    let nr_steps = 20;
+    let nr_steps = 100;
     let start_similarity = 0;
     let end_similarity = 100;
     let step = ((end_similarity - start_similarity) as f64) / nr_steps as f64;
