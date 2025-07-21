@@ -64,7 +64,7 @@ def textable(name: str, points: list[int], values: dict[str, list[str]]) -> str:
 
 def main():
     """Produces tables in tex format"""
-    parser = argparse.ArgumentParser(prog="plotter")
+    parser = argparse.ArgumentParser(prog="tables_ratios")
     parser.add_argument("file", nargs="?", default=("-"), type=argparse.FileType("r"))
     args = parser.parse_args()
 

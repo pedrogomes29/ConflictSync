@@ -110,7 +110,7 @@ def textable(name: str, points: list[int], values: dict[str, list[str]], bold_mi
 
 def main():
     """Produces tables in tex format"""
-    parser = argparse.ArgumentParser(prog="plotter")
+    parser = argparse.ArgumentParser(prog="tables_transmitted")
     parser.add_argument("file", nargs="?", default=("-"), type=argparse.FileType("r"))
     parser.add_argument("--data_type_name", help="Optional name of the data type", default=None)
 

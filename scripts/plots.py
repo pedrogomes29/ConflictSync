@@ -406,7 +406,7 @@ def plot_time_to_sync(exp: Experiment, colors: dict[Algorithm, ColorType]) -> Fi
 
 def main():
     """Script that extracts relevant data from logs and produces the plots for each experiment"""
-    parser = argparse.ArgumentParser(prog="plotter")
+    parser = argparse.ArgumentParser(prog="plots")
     parser.add_argument("files", nargs="*", default=("-"), type=argparse.FileType("r"))
     parser.add_argument("--save", action="store_true")
     parser.add_argument("--show", action="store_true")
