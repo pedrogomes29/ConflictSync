@@ -1,6 +1,6 @@
-# xp
+# ConflictSync
 
-A framework for testing state-based CRDTs sync protocols.
+Implementation and evaluation of ConflictSync, the first digest-driven CRDT synchronization algorithm.
 
 ## Usage
 
