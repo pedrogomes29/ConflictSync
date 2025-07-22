@@ -7,20 +7,16 @@ use std::{
 use crate::{
     bloom::BloomFilter,
     crdt::{Decompose, Extract},
-    rateless_bloom::RatelessBF,
     riblt::{RatelessIBLT, Symbol},
     tracker::Telemetry,
 };
 
 pub mod baseline;
-pub mod bloom;
-pub mod bloombuckets;
-pub mod bloomribltbuckets;
-pub mod bloomriblthashes;
 pub mod buckets;
-pub mod bucketsriblt;
-pub mod rbloomriblthashes;
+pub mod bloom;
 pub mod riblthashes;
+pub mod bloombuckets;
+pub mod bloomriblthashes;
 
 pub trait Algorithm<T> {
     type Tracker: Telemetry;
@@ -120,27 +116,5 @@ where
             riblt.add_symbol(symbol.clone());
         });
         riblt
-    }
-}
-
-pub trait BuildRatelessFilter<T>
-where
-    T: Extract,
-{
-    fn filter_from(&self, decompositions: &[T], m_ratio: f64) -> RatelessBF<<T as Extract>::Item> {
-        let decompositions: Vec<_> = decompositions.into_iter().map(|d| d.extract()).collect();
-        let m = (decompositions.len() as f64 * m_ratio).ceil() as usize;
-        let filter = RatelessBF::new(decompositions, m);
-        filter
-    }
-
-    fn partition(
-        &self,
-        rateless_bf: &RatelessBF<<T as Extract>::Item>,
-        decompositions: Vec<T>,
-    ) -> (Vec<T>, Vec<T>) {
-        decompositions
-            .into_iter()
-            .partition(|d| rateless_bf.contains(&d.extract()))
     }
 }

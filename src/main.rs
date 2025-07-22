@@ -5,11 +5,9 @@ use std::env;
 mod benchmarks;
 mod bloom;
 mod crdt;
-mod rateless_bloom;
 mod riblt;
 mod sync;
 mod tracker;
-mod bayesian_estimation;
 
 /// Entry point for the execution of the experiments.
 ///
@@ -38,8 +36,6 @@ fn main() {
         "awset" => benchmarks::algorithms::run_awset_experiment(),
 
         "pncounter" => benchmarks::algorithms::run_pncounter_experiment(),
-
-        "ratelessbf" => benchmarks::rateless_bloom::run_gset_experiment(),
 
         _ => unreachable!(),
     };

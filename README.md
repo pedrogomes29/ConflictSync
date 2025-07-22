@@ -1,6 +1,6 @@
 # ConflictSync
-
 Implementation and evaluation of ConflictSync, the first digest-driven CRDT synchronization algorithm.
+
 
 ## Usage
 
@@ -13,8 +13,7 @@ $ cargo run -q -r -- gset
 $ cargo run -q -r -- pncounter
 ```
 
-Such output can be fed into [`scrips/plots.py`](./scripts/plots.py)
-to produce plots using matplotlib by using the following command:
+Such output can be fed into [`scrips/plots.py`](./scripts/plots.py) to produce plots using matplotlib by using the following command:
 
 ```bash
 $ python scripts/plots.py --help
@@ -32,5 +31,3 @@ The command is the following:
 ```bash
 $ python scripts/tables_ratios.py --help
 ```
-
-> If you have any questions, [send me an email](mailto:pedromgomes29+github@gmail.com)

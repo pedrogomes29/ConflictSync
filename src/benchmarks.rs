@@ -1,9 +1,8 @@
 pub mod algorithms;
-pub mod rateless_bloom;
 
 use std::collections::HashSet;
 
-use crate::crdt::{AWSet, GSet, Measure, PNCounter};
+use crate::crdt::{AWSet, GSet, PNCounter};
 
 use rand::{
     distributions::{Alphanumeric, Bernoulli, DistString, Distribution, Uniform},

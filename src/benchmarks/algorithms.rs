@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 
 use std::{
-    f64::consts::LN_2, fmt::Display, time::{Duration, Instant}
+    fmt::Display, time::{Duration, Instant}
 };
 
 use crate::{
-    benchmarks::{awsets_with, gsets_with, pncounters_with}, crdt::{Decompose, Extract, Measure}, rateless_bloom::{angle_heuristic::AngleHeuristicFactory, bayesian_no_params::{BayesianNoParams, BayesianNoParamsFactory}, bayesian_similarity::BayesianSimilarityFactory, StoppingStrategyFactory}, sync::{
-        baseline::Baseline, bloombuckets::BloomBuckets, bloomribltbuckets::BloomRibltBuckets, bloomriblthashes::BloomRibltHashes, buckets::Buckets, bucketsriblt::RibltBuckets, rbloomriblthashes::RBloomRibltHashes, riblthashes::RibltHashes, Algorithm
+    benchmarks::{awsets_with, gsets_with, pncounters_with}, crdt::{Decompose, Extract, Measure}, sync::{
+        baseline::Baseline, bloombuckets::BloomBuckets, bloomriblthashes::BloomRibltHashes, buckets::Buckets, riblthashes::RibltHashes, Algorithm
     }, tracker::{Bandwidth, DefaultEvent, DefaultTracker, Telemetry}
 };
 
@@ -85,7 +85,7 @@ where
     let nr_experiments = replicas.len();
     let message_to_events = replicas.into_iter().enumerate().fold(
         Vec::<Vec<DefaultEvent>>::new(),
-        |mut acc, (trial_nr, (local, remote))| {
+        |mut acc, (_trial_nr, (local, remote))| {
             let tracker = run(
                 algo,
                 similar,
@@ -143,7 +143,7 @@ where
             download.bits_per_sec()
         );
 
-        /*
+        
         let algo = Baseline::new();
         run_trial(
             &algo,
@@ -163,19 +163,6 @@ where
                 download
             );
         }
-
-        for lf in [0.2, 1.0, 5.0] {
-            let algo = RibltBuckets::new(lf);
-            run_trial(
-                &algo,
-                similar,
-                replicas.clone(),
-                upload,
-                download
-            );
-        }
-        */
-
         
         let algo = RibltHashes::new();
         run_trial(
@@ -185,10 +172,7 @@ where
             upload,
             download
         );
-        
-
-
-        /*        
+              
         for fpr in [0.01, 0.25] {
             for lf in [1.0, 0.2] {
                 let algo = BloomBuckets::new(fpr, lf);
@@ -201,84 +185,10 @@ where
                 );
             }
         }
-
-
-        for fpr in [0.01, 0.25] {
-            for lf in [1.0, 0.2] {
-                let algo = BloomRibltBuckets::new(fpr, lf);
-                run_trial(
-                    &algo,
-                    similar,
-                    replicas.clone(),
-                    upload,
-                    download
-                );
-            }
-        }
-
         
 
         for fpr in [0.01, 0.1, 0.25]  {
             let algo = BloomRibltHashes::new(fpr);
-            run_trial(
-                &algo,
-                similar,
-                replicas.clone(),
-                upload,
-                download
-            );
-        }
-        */
-
-        for i in 1..=100 {
-            let fpr = i as f64 * 0.005;
-            let algo = BloomRibltHashes::new(fpr);
-            run_trial(
-                &algo,
-                similar,
-                replicas.clone(),
-                upload,
-                download,
-            );
-        }
-      
-        /*
-        for m_ratio in [1.0/LN_2] {
-            for angle_threshold_deg in [0.2, 0.5, 1.0] {
-                let stopping_strategy_factory = AngleHeuristicFactory::new(angle_threshold_deg, 1);
-                let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
-                run_trial(
-                    &algo,
-                    similar,
-                    replicas.clone(),
-                    upload,
-                    download
-                );
-            }
-        }
-
-        
-        
-        for m_ratio in [1.0/LN_2] {
-            for target_similarity in [0.97, 0.99, 0.995] {
-                let stopping_strategy_factory = BayesianSimilarityFactory::new(m_ratio, target_similarity);
-                let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
-
-                run_trial(
-                    &algo,
-                    similar,
-                    replicas.clone(),
-                    upload,
-                    download
-                );
-            }
-        }
-        */
-
-        for m_ratio in [1.0/LN_2] {
-            let stopping_strategy_factory = BayesianNoParamsFactory::new(m_ratio);
-            let algo = RBloomRibltHashes::new(m_ratio, stopping_strategy_factory);
-
             run_trial(
                 &algo,
                 similar,
@@ -296,7 +206,7 @@ where
     F: Fn(f64) -> (T, T),
 {
     let exec_time = Instant::now();
-    let nr_steps = 100;
+    let nr_steps = 20;
     let start_similarity = 0;
     let end_similarity = 100;
     let step = ((end_similarity - start_similarity) as f64) / nr_steps as f64;
