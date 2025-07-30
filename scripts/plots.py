@@ -1,6 +1,10 @@
 # plots.py
 # Plots the data gathered from experiements
 
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+
 import argparse
 from collections import defaultdict
 from io import TextIOWrapper
